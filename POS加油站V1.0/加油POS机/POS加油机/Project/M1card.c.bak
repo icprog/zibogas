@@ -1,0 +1,3250 @@
+/******************************************************************************
+Copyright 2012 	大连易达通电子技术有限公司
+All rights riserved.
+文 件 名： m1card.c
+模块名称： E550 刷卡子程序
+功能概要： 主程序
+*****************************************************************/
+#include "main.h"
+
+extern DevHandle hCpuHandle;      //CPU卡
+extern DevHandle hMifsHandle;
+extern DevHandle hSam1Handle;
+extern DEV_STAT    DevStat;
+ERROR_CARD_INFO ErrCardInfo;
+CARD_INFO       CardInfo;
+GRAYRECORD  GrayRecord;
+
+extern INT8U     KeySector[14][6];
+
+//向PSAM卡发命令用到的一些code变量
+INT8U const       ReadPOSNumber[5]=          {0x00,0xB0,0x96,0x00,0x06};     
+INT8U const       GetChallenge[5]=           {0x00,0x84,0x00,0x00,0x04};		//取POS号
+INT8U const       SELECT_SAM_ADF1[7]=        {0x00,0xA4,0x00,0x00,0x02,0x10,0x01};		//选1001目录
+INT8U const       SELECT_JDSAM_ADF1[7]=      {0x00,0xA4,0x00,0x0C,0x02,0x10,0x01};		//选1001目录
+
+INT8U const       SELECT_SAM_ADF2[7]=      {0x00,0xA4,0x00,0x00,0x02,0x10,0x02};		//选1002目录
+INT8U const       SELECT_SAM_ADF3[7]=      {0x00,0xA4,0x00,0x00,0x02,0x10,0x03};		//选1003目录
+INT8U const       DES_INIT[5]=                     {0x80,0x1A,0x45,0x01,0x10};							//DES计算初始化
+INT8U const      GetResponse[4]=                {0x00,0xC0,0x00,0x00};									//取响应
+INT8U const      DES_CRYPT[4]=                   {0x80,0xFA,0x05,0x00};									 //DES计算
+INT8U const      READ_SAM_KEY_NUM[5]=   {0x00,0xb0,0x97,0x00,0x19};						 //读密钥版本号
+INT8U const      GET_MAC1[5]=                     {0x80,0x70,0x00,0x00,0x24};						  //PSAM卡算MAC1
+INT8U const      VERIFY_MAC2[5]=                {0x80,0x72,0x00,0x00,0x04};							//验证MAC2
+INT8U const      GET_M1_KEY[5]=                 {0x80,0xFC,0x01,0x01,0x11};							//计算M1卡个区密钥
+INT8U const      TAC_INIT[5]=                       {0x80,0x1A,0x44,0x01,0x10};							//M1卡交易流程中，TAC码计算初始化
+//INT8U const      TAC_INIT[5]=                       {0x80,0x1A,0x24,0x01,0x08};							//M1卡交易流程中，TAC码计算初始化
+INT8U const      TAC_JDINIT[5]=                       {0x80,0x1A,0x24,0x07,0x08};							//M1卡交易流程中，TAC码计算初始化
+INT8U const      CAL_TAC_M1[5]=                 {0x80,0xFA,0x01,0x00,0x18};							//M1卡交易过程中，计算TAC码
+INT8U const      DESCOMMUNICATION1[5]=   {0x80,0xfa,0x05,0x00,0x20};						//CPU卡写0017文件
+INT8U const      DESCOMMUNICATION[4]=   {0x80,0xfa,0x05,0x00};									//DES计算
+INT8U const		 ISAM_CAL_KEY_INIT[5]={0x80,0x1A,0x28,0x01,0x08};//isam卡计算密钥初始化
+INT8U const      ISAM_CAL_KEY[5]={0x80,0xFA,0x00,0x00,0x08};//ISAM卡计算充值密钥
+
+extern const char 	parmFileName[];
+extern const char 	blackFileName[];
+extern const char 	currecFileName[];
+extern const char 	conrecFileName[];
+extern const char 	hisrecFileName[];
+extern const char 	grayrecFileName[];
+
+#define    PICC_DECREMENT   0
+#define    PICC_INCREMENT   1
+/*****************************************************************
+ 函数原型：Get_Sector_PermissionA
+ 功能描述：取得第N区的读写权限
+ 参数描述：
+ 参数名称：	输入/输出？	类型		描述
+ sector		输入			INT8U		要取得权限的区
+ key		输入			INT8U *		要取得权限区的密钥
+				
+ 返  回  值：ok(0)-成功
+				 notok(0xFF)-失败
+				   
+ 作      者	：刘及华
+ 日      期：2012-1-10
+ 修改历史：
+		日期		修改人		修改描述
+		------		---------	-------------
+		20070207    yufuyong	增加充值密钥验证
+*****************************************************************/
+INT8U Get_Sector_PermissionA(INT8U sector, INT8U *key)
+{
+	uchar ucResult;
+//	ushort ICType;
+
+//  (void)EA_ucMIFRequest(hMifsHandle, EM_mifs_IDLE, &ICType);
+	//uchar     aucMifKeyB0[6] = {0xa0,0xa1,0xa2,0xa3,0xa4,0xa5};
+	ucResult = EA_ucMIFAuthToRam (hMifsHandle, sector, EM_mifs_KEYA, key);
+	if (ucResult != EM_SUCCESS)
+	{
+		   /*  错误处理*/
+		return notok;
+	}
+	else
+	{
+		// 通过认证
+		return ok;
+	}
+
+}
+
+/*****************************************************************
+ 函数原型：Get_Sector_PermissionB
+ 功能描述：取得第N区的读写权限
+ 参数描述：
+ 参数名称：	输入/输出？	类型		描述
+ sector		输入			INT8U		要取得权限的区
+ key		输入			INT8U *		要取得权限区的密钥
+				
+ 返  回  值：ok(0)-成功
+				 notok(0xFF)-失败
+				   
+ 作      者	：刘及华
+ 日      期：2012-12-10
+ 修改历史：
+		日期		修改人		修改描述
+		------		---------	-------------
+		20070207    yufuyong	增加充值密钥验证
+*****************************************************************/
+INT8U Get_Sector_PermissionB(INT8U sector, INT8U *key)
+{
+	uchar ucResult;
+	ucResult = EA_ucMIFAuthToRam(hMifsHandle, sector, EM_mifs_KEYB, key);
+	if (ucResult != EM_SUCCESS)
+	{
+		/*  错误处理*/
+		lcddisperr("密钥验证错误!");
+		return notok;
+	}
+	else
+	{
+		return ok;
+	}
+}
+
+///******************************************************************************
+// 函数名称：M1CardConsumeProcess
+// 功能描述：M1卡消费交易流程
+// 参数描述：
+// 参数名称：	输入/输出？	类型		描述
+// 
+// 返  回  值：ok(0)-成功
+//				 notok(0xFF)-失败
+//				 0xF0-重新刷卡
+//				   
+// 作      者	：许岩
+// 日      期：2004-09-02
+// 修改历史：
+//		日期		修改人		修改描述
+//		------		---------	-------------
+//******************************************************************************/
+//INT8U M1CardConsumeProcess(void)
+//{
+//	INT8U   LOCAL_V_TYPE  i = 0;
+//	INT8U   LOCAL_V_TYPE  j = 0;
+//	INT32U  LOCAL_V_TYPE  start_using_date = 0;				//启用日期
+//	INT32U  LOCAL_V_TYPE  end_using_date = 0;				//有效截至日期
+//	INT32U  LOCAL_V_TYPE  cur_date = 0;							//当前时间
+//	INT32U  LOCAL_V_TYPE  temp_int32u = 0;
+//	INT8S   LOCAL_V_TYPE  h = 0;
+//	uint    LOCAL_V_TYPE  rcv_length;
+//	INT16U  LOCAL_V_TYPE  k = 0;
+//	INT8U   LOCAL_V_TYPE  temp_buf[50];
+//	INT8U   LOCAL_V_TYPE  temp_rcv_buf[50];
+//	INT8U   LOCAL_V_TYPE  temp_snd_buf[50];
+//	INT8U   LOCAL_V_TYPE  block_buffer1[16] = {0};			//M1卡一个block的数据缓冲
+//	INT16U  key ;
+//
+//	if(!ErrCardInfo.error_occured)
+//	{
+//		if(GetConsumeTradeAmt() != ok)
+//		{
+//			//EA_vCls();
+////  		MC530Off();
+////  		InitMC530(TYPE_A_ISO14443);
+//			EA_ucMIFHalt(hMifsHandle);
+//			return ok;
+//		}
+//	}	
+//
+////  MC530Off();
+////  if( InitMC530(TYPE_A_ISO14443) != MI_OK)
+////  	return notok;
+//	
+//	if(M1CardInit() != ok)
+//		return notok;
+//
+//	
+//
+//	////////////////////////////////////////
+//	//出错卡处理
+//	////////////////////////////////////////
+//	if ( ErrCardInfo.error_occured == TRUE )
+//	{//出错卡重入，PSAM卡不能复位
+//		h = memcmp(&CardInfo.csn[0], &ErrCardInfo.csn[0], 4);//出错卡硬件卡号比较
+//		if ( h != ok )
+//		{
+//// 			cardinfomation.return_card=1;
+//// 			printf_debug("请刷出错卡");
+////  		(void)EA_vCls();
+//			lcddisperr("请刷出错卡");
+//			Beep(1000);
+//
+//			return notok;//卡交易出错，但回的卡片不是出错卡
+//		}
+//	}
+//	else
+//	{
+//		////////////////////////////////////////
+//		//保存时间
+//		////////////////////////////////////////
+//		i = SaveCardInTime(&CardInfo);
+//		if ( i != ok )
+//			return notok;
+//		////////////////////////////////////////
+//		//PSAM卡复位
+//		////////////////////////////////////////
+//		i = PsamRst();
+//		if ( i != ok )
+//		{
+//			return notok;
+//		}
+//
+//	}
+//
+//	////////////////////////////////////////
+//	//读Sector 1 中4 区信息
+//	////////////////////////////////////////
+//	memcpy(&KeySector[1][0], &CardInfo.csn[0], 4);
+//	KeySector[1][4] = ~KeySector[1][0];
+//	KeySector[1][5] = ~KeySector[1][1];
+//
+//	i = Get_Sector_PermissionA(1, &KeySector[1][0]);
+//	if ( i != ok )
+//		return notok;
+//
+//	i = EA_ucMIFRead(hMifsHandle, 4, block_buffer1);
+//
+//	if ( i != ok )
+//		return notok;
+//
+//	if ( block_buffer1[12] != 0x01 )	  //判断启用标志
+//	{
+//		//卡未启用处理
+//		(void)EA_vCls();
+//		EA_vDisp(3, 1, "     卡片未启用!    ");         
+//		Beep(1000);
+////  	(void)delay_and_wait_key(3, 0, 0);
+//		EA_uiInkey(3);
+//		////////////////////////////////////////
+//		//M1卡挂卡
+//		////////////////////////////////////////
+////  	j =EA_ucMIFHalt(hMifsHandle)();	//挂卡
+//		EA_ucMIFHalt(hMifsHandle);
+//		return ok;
+//	}
+//
+//	//保存卡的应用系列号
+//	memcpy(&CardInfo._CARD_NUMBER.detail_card_number.city_code[0], block_buffer1, 2);	//城市代码
+//	memcpy(&CardInfo._CARD_NUMBER.detail_card_number.calling_code[0], block_buffer1+2, 2);	//城市代码
+//	memcpy(&CardInfo._CARD_NUMBER.detail_card_number.serial_number[0], &block_buffer1[4], 4);//发行流水号
+//	memcpy(&CardInfo.authentication_code[0], &block_buffer1[8], 4);//保存卡认证码
+//	CardInfo.card_type = block_buffer1[13];	//卡类型
+//
+//#ifdef DEBUG
+//	TRACE232("read block 4 ok.\n\r");
+//#endif
+//
+//
+//	////////////////////////////////////////
+//	//计算刷卡间隔时间
+//	////////////////////////////////////////
+////	i=Cal_Interval();
+////	if(i!=ok)
+////		return notok;
+//
+//	////////////////////////////////////////
+//	//出错卡处理
+//	////////////////////////////////////////
+//	if ( ErrCardInfo.error_occured == TRUE )
+//	{//出错卡重入，PSAM卡不能复位
+//		h = memcmp(&CardInfo._CARD_NUMBER.detail_card_number.serial_number[0], &ErrCardInfo.m1_card_number[0], 4);	//出错卡卡号比较
+//		if ( h != ok )
+//		{
+//			return notok;//卡交易出错，但回的卡片不是出错卡
+//		}
+//	}
+//
+//// #ifdef USE_TEST_PSAM
+//	////////////////////////////////////////
+//	//PSAM卡选1001目录
+//	////////////////////////////////////////
+//	k = CmdPsam(hSam1Handle, (void *)SELECT_SAM_ADF1, sizeof(SELECT_SAM_ADF1), 
+//				temp_buf, &rcv_length);		//选1001目录
+//	if ( k != ok )
+//		return notok;
+//// #else
+//// 	////////////////////////////////////////
+//// 	//PSAM卡选1003目录
+//// 	////////////////////////////////////////
+//// 	k = CmdPsam(DevStat.cur_psam_channel, (void *)SELECT_SAM_ADF3, sizeof(SELECT_SAM_ADF3),
+//// 				temp_buf, &rcv_length);		//选1001目录
+//// 	if ( k != 0x9000 )
+//// 		return notok;
+//// #endif
+//
+//	////////////////////////////////////////
+//	//PSAM卡算各区密钥
+//	////////////////////////////////////////
+//	memcpy(temp_snd_buf, GET_M1_KEY, sizeof(GET_M1_KEY));//头
+//	memcpy(&temp_snd_buf[5], &CardInfo._CARD_NUMBER.detail_card_number.city_code[0], 2);//城市代码
+//	memcpy(&temp_snd_buf[7], &CardInfo.csn[0], 4);//CSN硬件卡号
+//	memcpy(&temp_snd_buf[11], &CardInfo._CARD_NUMBER.detail_card_number.serial_number[2], 2);//卡发行流水号后2字节
+//	memcpy(&temp_snd_buf[13], &CardInfo.authentication_code[0], 4);	//卡认证码
+//	temp_snd_buf[17] = 0x02;
+//	temp_snd_buf[18] = 0x06;
+//	temp_snd_buf[19] = 0x0a;
+//	temp_snd_buf[20] = 0x0b;
+//	temp_snd_buf[21] = 0x0c;//计算sector2和6,10,11,12的密钥
+//	k = CmdPsam(hSam1Handle, temp_snd_buf, 22, temp_rcv_buf, &rcv_length);//算MAC1
+//
+//	if ( k != ok )
+//		return notok;
+//	memcpy(&KeySector[2][0], &temp_rcv_buf[0], 6);	//保存计算出的密钥，2sector
+//	memcpy(&KeySector[6][0], &temp_rcv_buf[6], 6);//保存计算出的密钥，6sector
+//	memcpy(&KeySector[10][0], &temp_rcv_buf[12], 6);//保存计算出的密钥，10sector
+//	memcpy(&KeySector[11][0], &temp_rcv_buf[18], 6);//保存计算出的密钥，11sector
+//	memcpy(&KeySector[12][0], &temp_rcv_buf[24], 6);//保存计算出的密钥，12sector#ifdef DEBUG
+////#ifdef DEBUG
+////    TRACE232("psam cal key ok.\n\r");
+////#endif
+//
+//
+//	////////////////////////////////////////
+//	//查黑名单
+//	////////////////////////////////////////
+//	memcpy(&temp_int32u, &CardInfo._CARD_NUMBER.detail_card_number.serial_number[0], 4);
+//	i = BlackName_Find(temp_int32u);	//黑名单判断
+//	if ( i == ok )
+//	{	//发现是黑名单卡
+////#ifdef DEBUG
+////        TRACE232("find black name card!\n\r");
+////#endif
+//		i = Lock_M1_Card_Process();//黑名单卡处理，锁卡
+//		return i;
+//	}
+//
+//	////////////////////////////////////////
+//	//读Sector 1 中5 区信息
+//	////////////////////////////////////////
+//	i = EA_ucMIFRead(hMifsHandle, 5, block_buffer1);
+//	if ( i != ok )
+//		return notok;
+//
+//	memcpy(&start_using_date, block_buffer1, 4);//启用日期
+//	memcpy(&end_using_date, block_buffer1+4, 4);//有效截至日期
+//
+//	//做有效期判断
+//	memcpy((void *)&cur_date, (void *)&CardInfo.card_in_time.century, 4);//取当前日avoid warning
+//	i = CheckPeriodOfValidity(start_using_date, cur_date, end_using_date);	//有效期判断
+//	if ( i != ok )
+//	{//过期处理，不允许交易
+//		//printf_debug("过有效期");
+//		EA_vDisp(4, 1, "  此卡过期,继续吗?  ");
+////  	if(select_affirm(4,"此卡过期,继续吗?")!=0)
+//		key = EA_uiInkey(0);
+//		switch(key)
+//		{
+//		   case EM_key_ENTER:
+//			   		Beep(500);
+////  		j = EA_ucMIFHalt(hMifsHandle)();	//挂卡
+////  				EA_ucMIFHalt(hMifsHandle);
+//		//DispPurchaseResultDelay = DISP_DELAY; 			
+//					break;
+//		   case EM_key_CANCEL:
+//				EA_ucMIFHalt(hMifsHandle);
+//				return ok;
+//		}
+//	}
+//
+//
+//	CardInfo.card_purchase_type = TT_NORMAL_CONSUME;//普通卡正常交易
+//	
+//	////////////////////////////////////////
+//	//各种卡的子处理流程
+//	////////////////////////////////////////
+//
+//	switch ( CardInfo.card_type )
+//	{
+//		case CARDT_NORMAL:		//普通卡
+//		case CARDT_STUDENT:	//小学生卡
+//// 		case CARDT_STUDENT_B:	//中学生卡
+//// 		case CARDT_MONTH:		//月票卡
+//		case CARDT_MEMORY:		//纪念卡
+//
+//		case CARDT_OLDMAN:		//老年卡
+//		case CARDT_FREE:	//家属卡
+//			i = M1_Card_Consume_ProcessA();
+//			if ( i == ok )		  //扣款成功
+//			{
+//				CardInfo.card_purchase_type = TT_NORMAL_CONSUME;//普通卡正常交易
+//				
+//				CalConsumeTAC();		//计算TAC码
+//				EA_ucMIFHalt(hMifsHandle);
+//				
+//				(void)StoreConsumeRecord(&CardInfo);			//储存消费记录
+//
+//				DisplayPurchaseResult(&CardInfo);	//显示交易结果
+//
+//			//记录最后一次的交易类型
+//			//	DevStat.last_trade_type = TT_NORMAL_CONSUME;
+//				DevStat.gray_flag = FALSE;
+//				DevStat.binhand.consume_cnt++;
+//				DevStat.binhand.consume_amt += ((float)(CardInfo.fare))/100;
+//				WriteParam();
+//				
+//				if(DevStat.mode==0x00)
+//					print_consume_record();
+//
+//				//恢复状态
+//				memset(&CardInfo, 0x00, sizeof(CardInfo));		//清卡片交易信息
+//				memset(&ErrCardInfo, 0x00, sizeof(ErrCardInfo));	//清出错卡信息
+//				//DispPurchaseResultDelay = DISP_DELAY;
+//				DevStat.purchase_again_req = FALSE; 				//清重新刷卡语音标志
+//				DevStat.voice_purchase_again_freq=FALSE;
+//			//	   halt_req = TRUE;
+//
+//#ifdef  DEBUG
+//				TRACE232("ICCardProcess over.\n\r");
+//#endif
+////			//数据上传		
+////				MC530Off();
+////				i = GPRS_SEND_RECORD();
+////				if(i == ok)
+////				{
+////					DevStat.have_data_not_send_flag = FALSE;
+////					WriteParam();
+////				}
+//				
+//			//		MC530Off();
+//			//		GPRSProcess();
+//				return ok;
+//			}
+//			break;
+//
+//		default:
+//			printf_debug((void *)"管理卡不能消费");
+//			(void)EA_ucMIFHalt(hMifsHandle);	//挂卡
+//			return ok;
+//	}
+//
+//	j = EA_ucMIFHalt(hMifsHandle);	//挂卡
+//
+//	if ( i != ok )
+//		return i;
+//
+////     if((CardInfo.card_purchase_type==COMMON_CONSUME_TYPE)
+////     ||(CardInfo.card_purchase_type==FAVOURABLE_CONSUME_TYPE)
+////     ||(CardInfo.card_purchase_type==ZERO_CONSUME_TYPE))
+////     {
+////         //这3种情况计算tac  modified by myron for dandong flow 2005.2.18
+////         CalTAC();       //计算TAC码
+////     }
+////     else
+////     {
+////     }
+//
+//	return ok;
+//}
+//
+
+/******************************************************************************
+ 函数名称：M1CardProcess
+ 功能描述：M1卡交易流程
+ 参数描述：
+ 参数名称：	输入/输出？	类型		描述
+ 
+ 返  回  值：ok(0)-成功
+				 notok(0xFF)-失败
+				 0xF0-重新刷卡
+				   
+ 作      者	：许岩
+ 日      期：2004-09-02
+ 修改历史：
+		日期		修改人		修改描述
+		------		---------	-------------
+******************************************************************************/
+INT8U M1CardProcess(void)
+{
+	
+	INT8U   LOCAL_V_TYPE  i = 0;
+	INT8U   LOCAL_V_TYPE  j = 0;
+	INT32U  LOCAL_V_TYPE  start_using_date = 0;				//启用日期
+	INT32U  LOCAL_V_TYPE  end_using_date = 0;				//有效截至日期
+	INT8S   LOCAL_V_TYPE  h = 0;
+//	INT8U	rcv_buf[50];
+//	uint	rcv_length;
+	INT8U   LOCAL_V_TYPE  block_buffer1[16] = {0};			//M1卡一个block的数据缓冲
+
+
+	////////////////////////////////////////
+	//出错卡处理
+	////////////////////////////////////////
+	if ( ErrCardInfo.error_occured == TRUE )
+	{//出错卡重入，PSAM卡不能复位
+		h = memcmp(&CardInfo.csn[0], &ErrCardInfo.csn[0], 4);//出错卡硬件卡号比较
+		if ( h != ok )
+		{
+			lcddisperr("请刷出错卡");
+			Beep(1000);
+			EA_ucMIFHalt(hMifsHandle);	//挂卡
+			return notok;//卡交易出错，但回的卡片不是出错卡
+		}
+	}
+	else
+	{
+		////////////////////////////////////////
+		//保存时间
+		////////////////////////////////////////
+		i = SaveCardInTime(&CardInfo);
+		if ( i != ok )
+		{
+			lcddisperr("时间出错");
+			return notok;
+		}
+			
+	}
+
+	 i = PsamRst();
+	 if ( i != ok )
+	 {
+		 lcddisperr((char *)"PSAM卡故障");
+		 EA_ucMIFHalt(hMifsHandle);
+		 return notok;
+	 }
+	
+	////////////////////////////////////////
+	//读Sector 1 中4 区信息
+	////////////////////////////////////////
+	memcpy(&KeySector[1][0], &CardInfo.csn[0], 4);
+	KeySector[1][4] = ~KeySector[1][0];
+	KeySector[1][5] = ~KeySector[1][1];
+
+	i = Get_Sector_PermissionA(1, &KeySector[1][0]);
+	if ( i != ok )
+	{
+//  	lcddisperr((char *)"ABN1");
+		return notok;
+	}
+		
+
+	i = EA_ucMIFRead(hMifsHandle, 4, block_buffer1);
+
+	if ( i != ok )
+	{
+//  	lcddisperr((char *)"ABN2");
+		return notok;
+	}
+		
+
+	if ( block_buffer1[12] != 0x01 )	  //判断启用标志
+	{
+		//卡未启用处理
+		lcddisperr((char *)"卡片未启用");
+		Beep(1000);
+		EA_ucMIFHalt(hMifsHandle);
+		(void)EA_uiInkey(3);
+		////////////////////////////////////////
+		//M1卡挂卡
+		////////////////////////////////////////	
+		return ok;
+	}
+
+	//保存卡的应用系列号
+	memcpy(&CardInfo._CARD_NUMBER.detail_card_number.city_code[0], block_buffer1, 2);	//城市代码
+	memcpy(&CardInfo._CARD_NUMBER.detail_card_number.calling_code[0], block_buffer1+2, 2);	//城市代码
+	memcpy(&CardInfo._CARD_NUMBER.detail_card_number.serial_number[0], &block_buffer1[4], 4);//发行流水号
+	memcpy(&CardInfo.authentication_code[0], &block_buffer1[8], 4);//保存卡认证码
+	CardInfo.card_type = block_buffer1[13];	//卡类型
+//#ifdef DEBUG
+//    TRACE232("read block 4 ok.\n\r");
+//#endif
+
+/*
+	if ( DevStat.record_number >= (MAX_REC_NUM - 30) )
+	{
+		if ( CardInfo.card_type == CARDT_GATHER )
+		{
+			;	//go on
+		}
+		else
+		{
+			return notok;										//容量已满
+		}
+	}
+*/
+
+//-------------------------------------------------------------------------------//
+//-------------------------------------------------------------------------------//
+//-------------------------------------------------------------------------------//
+//检索交易记录的最后一条记录，查找交易金额
+////////////////////////////////////////
+//判断与最后一次交易是否符合
+////////////////////////////////////////
+	if( CheckCardCredit() != ok)
+	{
+//  	j = EA_ucMIFHalt(hMifsHandle)();	//挂卡
+		EA_ucMIFHalt(hMifsHandle);
+		lcddisperr((char *)"ABN3");
+		return notok;
+	}
+//-------------------------------------------------------------------------------//	
+//-------------------------------------------------------------------------------//
+	EA_vCls();
+	EA_vDisplay(1,"      卡片冲账      ");
+	EA_vDisplay(2,"  请放好卡片别移动  ");
+	EA_vDisplay(3,"  处理中，请等待... ");
+	EA_uiInkeyMs(500);
+	////////////////////////////////////////
+	//计算刷卡间隔时间
+	////////////////////////////////////////
+//	i=Cal_Interval();
+//	if(i!=ok)
+//		return notok;
+
+	////////////////////////////////////////
+	//出错卡处理
+	////////////////////////////////////////
+	if ( ErrCardInfo.error_occured == TRUE )
+	{//出错卡重入，PSAM卡不能复位
+		h = memcmp(&CardInfo._CARD_NUMBER.detail_card_number.serial_number[0], &ErrCardInfo.m1_card_number[0], 4);	//出错卡卡号比较
+		if ( h != ok )
+		{
+			lcddisperr("卡交易出错");
+			EA_ucMIFHalt(hMifsHandle);	//挂卡
+			return notok;//卡交易出错，但回的卡片不是出错卡
+		}
+	}
+
+/*
+////////////////////////////////////////
+//ISAM卡计算密钥
+////////////////////////////////////////	
+	
+	if(DevStat.samcompcode==1)//捷德卡片
+	{
+		////////////////////////////////////////
+		//ISAM卡选1001目录
+		////////////////////////////////////////
+		k = CmdPsam(DevStat.cur_psam_channel, (void *)SELECT_JDSAM_ADF1, sizeof(SELECT_JDSAM_ADF1), 
+					temp_buf, &rcv_length); 	//选1001目录
+		if ( k != 0x9000 )
+			return notok;
+
+		////////////////////////////////////////
+		//ISAM卡算各区密钥
+		////////////////////////////////////////
+
+		//80FC010111'+ astr_readcard.city_code + astr_readcard.card_hardno + right(astr_readcard.card_no, 4) + astr_readcard.card_auth + '0102030405'
+		
+		memcpy(temp_snd_buf, GET_M1_KEY, sizeof(GET_M1_KEY));//头
+		memcpy(&temp_snd_buf[5], &CardInfo._CARD_NUMBER.detail_card_number.city_code[0], 2);//城市代码
+		memcpy(&temp_snd_buf[7], &CardInfo.csn[0], 4);//CSN硬件卡号
+		memcpy(&temp_snd_buf[11], &CardInfo._CARD_NUMBER.detail_card_number.serial_number[2], 2);//卡发行流水号后2字节
+		memcpy(&temp_snd_buf[13], &CardInfo.authentication_code[0], 4);
+		memcpy(&temp_snd_buf[17],"\x01\x02\x03\0x04\0x05", 5);
+		k = CmdPsam(DevStat.cur_psam_channel, temp_snd_buf, 22, temp_rcv_buf, &rcv_length);//算MAC1
+		if ( k != 0x9000 )
+			return notok;
+		for(cnt=0;cnt<5;cnt++)
+		{
+			memcpy(&KeySector[cnt+1][0], &temp_rcv_buf[cnt*6], 6);//保存计算出的密钥，2sector
+		}
+		memcpy(&temp_snd_buf[17],"\x06\x0A\x0C\x0B\x0D", 5);
+		k = CmdPsam(DevStat.cur_psam_channel, temp_snd_buf, 13, temp_rcv_buf, &rcv_length);//算MAC1
+		if ( k != 0x9000 )
+			return notok;
+			
+		memcpy(&KeySector[6][0], &temp_rcv_buf[0], 6);//保存计算出的密钥，2sector
+	}
+	if(DevStat.samcompcode==0)//握奇卡片
+	{
+		////////////////////////////////////////
+		//ISAM卡选1001目录
+		////////////////////////////////////////
+		k = CmdPsam(DevStat.cur_psam_channel, (void *)SELECT_SAM_ADF1, sizeof(SELECT_SAM_ADF1), 
+					temp_buf, &rcv_length); 	//选1001目录
+		if ( k != 0x9000 )
+			return notok;
+
+		////////////////////////////////////////
+		//ISAM卡算各区密钥
+		////////////////////////////////////////
+		for(cnt=1;cnt<7;cnt++)
+		{
+			if(cnt==7 ||cnt==8 || cnt==9)
+				continue;
+			memcpy(temp_snd_buf, ISAM_CAL_KEY_INIT, sizeof(ISAM_CAL_KEY_INIT));//头
+			memcpy(&temp_snd_buf[5], &CardInfo._CARD_NUMBER.detail_card_number.city_code[0], 2);//城市代码
+			memcpy(&temp_snd_buf[7], &CardInfo.csn[0], 4);//CSN硬件卡号
+			memcpy(&temp_snd_buf[11], &CardInfo._CARD_NUMBER.detail_card_number.serial_number[2], 2);//卡发行流水号后2字节
+
+			k = CmdPsam(DevStat.cur_psam_channel, temp_snd_buf, 13, temp_rcv_buf, &rcv_length);//算MAC1
+
+			if ( k != 0x9000 )
+				return notok;
+
+			memcpy(temp_snd_buf, ISAM_CAL_KEY, sizeof(ISAM_CAL_KEY));//头
+			memcpy(&temp_snd_buf[5], &CardInfo._CARD_NUMBER.detail_card_number.city_code[0], 2);//城市代码
+			memcpy(&temp_snd_buf[7], &CardInfo.csn[0], 4);//CSN硬件卡号
+			temp_snd_buf[11] = cnt;//扇区号
+			temp_snd_buf[12] = 0x00;
+
+			k = CmdPsam(DevStat.cur_psam_channel, temp_snd_buf, 13, temp_rcv_buf, &rcv_length);//算MAC1
+
+			if ( k != 0x9000 )
+				return notok;
+			
+		    memcpy(&KeySector[cnt][0], &temp_rcv_buf[0], 6);//保存计算出的密钥，2sector
+		}
+	}
+*/
+	////////////////////////////////////////
+	//读Sector 1 中5 区信息
+	////////////////////////////////////////
+	i = EA_ucMIFRead(hMifsHandle, 5, block_buffer1);
+	if ( i != ok )
+	{
+//  	lcddisperr("5 zone is fail");
+		return notok;
+	}
+
+	memcpy(&start_using_date, block_buffer1, 4);//启用日期
+	memcpy(&end_using_date, block_buffer1+4, 4);//有效截至日期
+
+/*
+	////////////////////////////////////////
+	//判断有效期
+	////////////////////////////////////////
+	switch ( CardInfo.card_type )
+	{
+		case CARDT_NORMAL:	//普通卡
+		case CARDT_MEMORY:	//纪念卡
+			//做有效期判断
+			memcpy(&cur_date, &CardInfo.card_in_time, 4);//取当前日avoid warning
+			i = CheckPeriodOfValidity(start_using_date, cur_date, end_using_date);	//有效期判断
+			if ( i != ok )
+			{//过期处理，不允许交易
+				printf_debug("过有效期");
+//                 Beep(500);
+				j = EA_ucMIFHalt(hMifsHandle)();	//挂卡
+				//DispPurchaseResultDelay = DISP_DELAY;
+				return notok;
+			}
+			break;	//v0.1.1 纪念卡加有效期判断
+
+		default:
+			//其他管理卡统一做有效期判断，免费卡如果过期也提示错误
+			memcpy(&cur_date, &CardInfo.card_in_time, 4);//取当前日avoid warning
+			i = CheckPeriodOfValidity(start_using_date, cur_date, end_using_date);	//有效期判断
+			if ( i != ok )
+			{//过期处理，不允许交易
+				printf_debug("过有效期");
+//                 Beep(500);
+				j = EA_ucMIFHalt(hMifsHandle)();	//挂卡
+				//DispPurchaseResultDelay = DISP_DELAY;
+				return notok;
+			}
+			break;	//v0.1.1 纪念卡加有效期判断
+	}
+*/
+	////////////////////////////////////////
+	//各种卡的子处理流程
+	////////////////////////////////////////
+
+	if( CardInfo.fare == 0)
+	{
+		EA_vCls();
+		EA_vDisplay(1,"     冲账金额为0    ");
+		EA_vDisplay(2,"      无需冲帐!     ");
+		EA_uiInkeyMs(500);
+		return ok;
+	}
+////////////////////////////////////////
+//后台计算密钥
+////////////////////////////////////////	
+	for( j = 0; j < 5; j++ )
+	{
+		memcpy(KeySector[j+2], DevStat.KEYVALUE[j], 6);
+	}
+//	MC530Off(); 
+
+//	DevStat.key_query_flag=TRUE;
+//	i = GPRSProcess();
+//	DevStat.key_query_flag=FALSE;
+	
+//	if( InitMC530(TYPE_A_ISO14443) != MI_OK)
+//		return notok;
+/*
+	if(i!=ok)//操作被取消或者网络故障
+	{
+//		printf_debug("故障请与中心联系");
+		EA_ucMIFHalt(hMifsHandle)();	//挂卡
+		return ok;
+	}
+*/
+/*
+	////////////////////////////////////////
+	//查黑名单
+	////////////////////////////////////////
+	memcpy(&temp_int32u, &CardInfo._CARD_NUMBER.detail_card_number.serial_number[0], 4);
+	i = BlackName_Find(temp_int32u);	//黑名单判断
+	if ( i == ok )
+	{	//发现是黑名单卡
+#ifdef DEBUG
+		TRACE232("find black name card!\n\r");
+#endif
+		//i = Lock_M1_Card_Process();//黑名单卡处理，锁卡
+		//return i;
+		if(select_affirm(4, "非法卡是否继续?") != 0)
+			return notok;
+	}
+*/
+
+	CardInfo.card_purchase_type = TT_NORMAL_CONSUME_MONEY;//普通卡正常交易
+	
+	i = M1_Card_Consume_Process();
+	if ( i == ok )		  //扣款成功
+	{
+		(void)CalTAC();		//计算TAC码
+		EA_ucMIFHalt(hMifsHandle);
+		if(OperTradeProcess(1, CardInfo.fare) != 0)
+		{
+			Cpucard_power_off();
+			ErrCardInfo.error_occured = TRUE;
+			return 0xF0;
+		}
+		Cpucard_power_off();
+
+		(void)StoreRecord(&CardInfo);			//储存消费记录
+
+		DisplayPurchaseResult(&CardInfo);	//显示交易结果
+
+//记录最后一次的交易类型
+		DevStat.last_trade_type = TT_NORMAL_CONSUME_MONEY;
+		DevStat.gray_flag = FALSE;
+		WriteParam();
+		
+		if(DevStat.mode == 0x00)
+		{
+//  		EA_ucSetStopFlag(EM_DISABLE_STOP);
+			print_record();
+//  		EA_ucSetStopFlag(EM_ENABLE_STOP);
+		}
+		//恢复状态
+		memset(&CardInfo, 0x00, sizeof(CardInfo));		//清卡片交易信息
+		memset(&ErrCardInfo, 0x00, sizeof(ErrCardInfo));	//清出错卡信息
+		//DispPurchaseResultDelay = DISP_DELAY;
+		DevStat.purchase_again_req = FALSE;					//清重新刷卡语音标志
+		DevStat.voice_purchase_again_freq = FALSE;
+		i = GPRS_SEND_RECORD();
+		if( i == ok )
+		{
+			DevStat.have_data_not_send_flag = FALSE;
+			WriteParam();
+		}
+		return ok;
+	}
+	return i; 
+}
+
+/******************************************************************************
+ 函数名称：M1CardQuery
+ 功能描述：M1卡信息查询
+ 参数描述：
+ 参数名称：	输入/输出？	类型		描述
+ 
+ 返  回  值：ok(0)-成功
+				 notok(0xFF)-失败
+				   
+ 作      者	：许岩
+ 日      期：2004-09-02
+ 修改历史：
+		日期		修改人		修改描述
+		------		---------	-------------
+******************************************************************************/
+INT8U M1CardQuery(void)
+{
+	INT8U   LOCAL_V_TYPE  i = 0;
+	INT32U  LOCAL_V_TYPE  start_using_date = 0;				//启用日期
+	INT32U  LOCAL_V_TYPE  end_using_date = 0;				//有效截至日期
+	INT32U  LOCAL_V_TYPE  cur_date = 0;							//当前时间
+	uint    LOCAL_V_TYPE  rcv_length;
+	INT16U  LOCAL_V_TYPE  k = 0;
+	INT8U   LOCAL_V_TYPE  temp_rcv_buf[50];
+	INT8U   LOCAL_V_TYPE  temp_snd_buf[50];
+	INT8U   LOCAL_V_TYPE  block_buffer1[16] = {0};			//M1卡一个block的数据缓冲
+	
+//  if(M1CardInit() != ok)
+//  {
+//  	return notok;
+//  }
+
+	////////////////////////////////////////
+	//读Sector 1 中4 区信息
+	////////////////////////////////////////
+	memcpy(&KeySector[1][0], &CardInfo.csn[0], 4);
+	KeySector[1][4] = ~KeySector[1][0];
+	KeySector[1][5] = ~KeySector[1][1];
+
+	i = Get_Sector_PermissionA(1, &KeySector[1][0]);
+	if ( i != ok )
+	{
+//  	lcddisperr("密钥验证错误!");
+		EA_ucMIFHalt (hMifsHandle);	//挂卡
+		return notok;
+	}
+			
+	i = EA_ucMIFRead(hMifsHandle, 4, block_buffer1);
+	if ( i != ok )
+	{
+//  	lcddisperr("读4区文件错误!");
+		EA_ucMIFHalt (hMifsHandle);	//挂卡
+		return notok;
+	}
+
+	if ( block_buffer1[12] != 0x01 )	  //判断启用标志
+	{
+		//卡未启用处理
+		lcddisperr("卡片未启用");
+		Beep(1000);
+		EA_ucMIFHalt(hMifsHandle);
+		return ok;
+	}
+	//保存卡的应用系列号
+	memcpy(&CardInfo._CARD_NUMBER.detail_card_number.city_code[0], block_buffer1, 2);	//城市代码
+	memcpy(&CardInfo._CARD_NUMBER.detail_card_number.calling_code[0], block_buffer1+2, 2);	//城市代码
+// 	DevStat.cur_psam_channel=block_buffer1[2];
+	memcpy(&CardInfo._CARD_NUMBER.detail_card_number.serial_number[0], &block_buffer1[4], 4);//发行流水号
+	memcpy(&CardInfo.authentication_code[0], &block_buffer1[8], 4);//保存卡认证码
+	CardInfo.card_type = block_buffer1[13];	//卡类型
+
+	////////////////////////////////////////
+	//读Sector 1 中5 区信息
+	////////////////////////////////////////
+	i = EA_ucMIFRead(hMifsHandle, 5, block_buffer1);
+	if ( i != ok )
+	{
+//  	lcddisperr("读5区错误");
+		EA_ucMIFHalt (hMifsHandle);	//挂卡
+		return notok;
+	}
+
+	memcpy(&start_using_date, block_buffer1, 4);//启用日期
+	memcpy(&end_using_date, block_buffer1+4, 4);//有效截至日期
+
+	////////////////////////////////////////
+	//判断有效期
+	////////////////////////////////////////
+
+	//做有效期判断
+	memcpy((void *)&cur_date, (void *)&CardInfo.card_in_time.century, 4);//取当前日avoid warning
+	i = CheckPeriodOfValidity(start_using_date, cur_date, end_using_date);	//有效期判断
+	if ( i != ok )
+	{	//过期处理，不允许交易
+		lcddisperr("此卡已经过期");
+		EA_ucMIFHalt (hMifsHandle);	//挂卡
+		return ok;
+	}
+
+	////////////////////////////////////////
+	//PSAM卡算各区密钥
+	////////////////////////////////////////
+	memcpy(temp_snd_buf, GET_M1_KEY, sizeof(GET_M1_KEY));//头
+	memcpy(&temp_snd_buf[5], &CardInfo._CARD_NUMBER.detail_card_number.city_code[0], 2);//城市代码
+	memcpy(&temp_snd_buf[7], &CardInfo.csn[0], 4);//CSN硬件卡号
+	memcpy(&temp_snd_buf[11], &CardInfo._CARD_NUMBER.detail_card_number.serial_number[2], 2);//卡发行流水号后2字节
+	memcpy(&temp_snd_buf[13], &CardInfo.authentication_code[0], 4);	//卡认证码
+	temp_snd_buf[17] = 0x02;
+	temp_snd_buf[18] = 0x06;
+	temp_snd_buf[19] = 0x0a;
+	temp_snd_buf[20] = 0x0b;
+	temp_snd_buf[21] = 0x0c;//计算sector2和6,10,11,12的密钥
+
+	k = CmdPsam(hSam1Handle, temp_snd_buf, 22, temp_rcv_buf, &rcv_length);//算MAC1
+	if ( k != ok )
+	{
+//  	lcddisplaerr("计算莫要失败")；
+		return notok;
+	}
+
+	memcpy(&KeySector[2][0], &temp_rcv_buf[0], 6);	//保存计算出的密钥，2sector
+	memcpy(&KeySector[6][0], &temp_rcv_buf[6], 6);//保存计算出的密钥，6sector
+	memcpy(&KeySector[10][0], &temp_rcv_buf[12], 6);//保存计算出的密钥，10sector
+	memcpy(&KeySector[11][0], &temp_rcv_buf[18], 6);//保存计算出的密钥，11sector
+	memcpy(&KeySector[12][0], &temp_rcv_buf[24], 6);//保存计算出的密钥，12sector
+
+/*	
+////////////////////////////////////////
+//ISAM卡计算密钥
+////////////////////////////////////////	
+	
+	if(DevStat.samcompcode==1)//捷德卡片
+	{
+		////////////////////////////////////////
+		//ISAM卡选1001目录
+		////////////////////////////////////////
+		k = CmdPsam(DevStat.cur_psam_channel, (void *)SELECT_JDSAM_ADF1, sizeof(SELECT_JDSAM_ADF1), 
+					temp_buf, &rcv_length); 	//选1001目录
+		if ( k != 0x9000 )
+			return notok;
+
+		////////////////////////////////////////
+		//ISAM卡算各区密钥
+		////////////////////////////////////////
+
+		//80FC010111'+ astr_readcard.city_code + astr_readcard.card_hardno + right(astr_readcard.card_no, 4) + astr_readcard.card_auth + '0102030405'
+		
+		memcpy(temp_snd_buf, GET_M1_KEY, sizeof(GET_M1_KEY));//头
+		memcpy(&temp_snd_buf[5], &CardInfo._CARD_NUMBER.detail_card_number.city_code[0], 2);//城市代码
+		memcpy(&temp_snd_buf[7], &CardInfo.csn[0], 4);//CSN硬件卡号
+		memcpy(&temp_snd_buf[11], &CardInfo._CARD_NUMBER.detail_card_number.serial_number[2], 2);//卡发行流水号后2字节
+		memcpy(&temp_snd_buf[13], &CardInfo.authentication_code[0], 4);
+		memcpy(&temp_snd_buf[17],"\x01\x02\x03\0x04\0x05", 5);
+		k = CmdPsam(DevStat.cur_psam_channel, temp_snd_buf, 22, temp_rcv_buf, &rcv_length);//算MAC1
+		if ( k != 0x9000 )
+			return notok;
+		for(cnt=0;cnt<5;cnt++)
+		{
+			memcpy(&KeySector[cnt+1][0], &temp_rcv_buf[cnt*6], 6);//保存计算出的密钥，2sector
+		}
+		memcpy(&temp_snd_buf[17],"\x06\x0A\x0C\x0B\x0D", 5);
+		k = CmdPsam(DevStat.cur_psam_channel, temp_snd_buf, 13, temp_rcv_buf, &rcv_length);//算MAC1
+		if ( k != 0x9000 )
+			return notok;
+			
+		memcpy(&KeySector[6][0], &temp_rcv_buf[0], 6);//保存计算出的密钥，2sector
+	}
+	if(DevStat.samcompcode==0)//握奇卡片
+	{
+		////////////////////////////////////////
+		//ISAM卡选1001目录
+		////////////////////////////////////////
+		k = CmdPsam(DevStat.cur_psam_channel, (void *)SELECT_SAM_ADF1, sizeof(SELECT_SAM_ADF1), 
+					temp_buf, &rcv_length); 	//选1001目录
+		if ( k != 0x9000 )
+			return notok;
+
+		////////////////////////////////////////
+		//ISAM卡算各区密钥
+		////////////////////////////////////////
+		for(cnt=1;cnt<7;cnt++)
+		{
+			if(cnt==7 ||cnt==8 || cnt==9)
+				continue;
+			memcpy(temp_snd_buf, ISAM_CAL_KEY_INIT, sizeof(ISAM_CAL_KEY_INIT));//头
+			memcpy(&temp_snd_buf[5], &CardInfo._CARD_NUMBER.detail_card_number.city_code[0], 2);//城市代码
+			memcpy(&temp_snd_buf[7], &CardInfo.csn[0], 4);//CSN硬件卡号
+			memcpy(&temp_snd_buf[11], &CardInfo._CARD_NUMBER.detail_card_number.serial_number[2], 2);//卡发行流水号后2字节
+
+			k = CmdPsam(DevStat.cur_psam_channel, temp_snd_buf, 13, temp_rcv_buf, &rcv_length);//算MAC1
+
+			if ( k != 0x9000 )
+				return notok;
+
+			memcpy(temp_snd_buf, ISAM_CAL_KEY, sizeof(ISAM_CAL_KEY));//头
+			memcpy(&temp_snd_buf[5], &CardInfo._CARD_NUMBER.detail_card_number.city_code[0], 2);//城市代码
+			memcpy(&temp_snd_buf[7], &CardInfo.csn[0], 4);//CSN硬件卡号
+			temp_snd_buf[11] = cnt;//扇区号
+			temp_snd_buf[12] = 0x00;
+
+			k = CmdPsam(DevStat.cur_psam_channel, temp_snd_buf, 13, temp_rcv_buf, &rcv_length);//算MAC1
+
+			if ( k != 0x9000 )
+				return notok;
+			
+		    memcpy(&KeySector[cnt][0], &temp_rcv_buf[0], 6);//保存计算出的密钥，2sector
+		}
+	}
+*/
+
+//	MC530Off(); 
+
+//	GPRSProcess();
+
+//	if( InitMC530(TYPE_A_ISO14443) != MI_OK) 
+//		return notok;
+	
+//	if(M1CardInit() != ok)
+//	{
+//		return notok;
+//	}
+
+
+//	switch ( CardInfo.card_type )
+//	{
+//		case CARDT_NORMAL:	//普通卡
+//		case CARDT_MEMORY:	//纪念卡
+			//做有效期判断
+//			memcpy((void *)&cur_date, (void *)&CardInfo.card_in_time.century, 4);//取当前日avoid warning
+//			i = CheckPeriodOfValidity(start_using_date, cur_date, end_using_date);	//有效期判断
+//			if ( i != ok )
+//			{//过期处理，不允许交易
+//				printf_debug("过有效期");
+// 				Beep(500);
+//				j = EA_ucMIFHalt(hMifsHandle)();	//挂卡
+//				//DispPurchaseResultDelay = DISP_DELAY;				
+//				return notok;
+//			}
+//			break;	//v0.1.1 纪念卡加有效期判断
+
+//		case CARDT_STUDENT_A:	//小学生卡
+// 		case CARDT_STUDENT_B:	//中学生卡
+// 		case CARDT_MONTH:		//月票卡
+// 			memcpy(&cur_date, &CardInfo.card_in_time, 4);//取当前日avoid warning
+// 			i = CheckPeriodOfValidity(start_using_date, cur_date, end_using_date);	//有效期判断
+// 			if ( i != ok )
+// 			{//过期处理，按普通卡费率扣款
+// 				CardInfo.card_type = CARDT_NORMAL;
+// 			}
+//			break;
+
+//		default:
+			//其他管理卡统一做有效期判断，免费卡如果过期也提示错误
+//			memcpy(&cur_date, &CardInfo.card_in_time, 4);//取当前日avoid warning
+//			i = CheckPeriodOfValidity(start_using_date, cur_date, end_using_date);	//有效期判断
+//			if ( i != ok )
+//			{//过期处理，不允许交易
+//				printf_debug("过有效期");
+// 				Beep(500);
+//				j = EA_ucMIFHalt(hMifsHandle)();	//挂卡
+//				//DispPurchaseResultDelay = DISP_DELAY;				
+//				return notok;
+//			}
+//			break;	//v0.1.1 纪念卡加有效期判断
+//	}
+
+	////////////////////////////////////////
+	//验证Sector 6 密钥
+	////////////////////////////////////////
+	i = Get_Sector_PermissionA(6, &KeySector[6][0]);
+	if ( i != ok )
+	{
+		EA_ucMIFHalt (hMifsHandle);	//挂卡
+		return notok;
+	}
+	
+	////////////////////////////////////////
+	//判断此卡是否已经置黑名单标志
+	////////////////////////////////////////
+	if ( block_buffer1[7] == 0x04 )
+	{
+		lcddisperr("        非法卡       ");
+		(void)EA_ucMIFHalt(hMifsHandle);	
+		return ok;
+	}
+	switch ( CardInfo.card_type )
+	{
+		case CARDT_NORMAL:
+		case CARDT_STUDENT:
+		case CARDT_OLDMAN:
+		case CARDT_FREE:
+		case CARDT_MEMORY:
+		case CARDT_DRIVER:
+			i = QueryNormal();
+			(void)EA_ucMIFHalt(hMifsHandle);
+			return i;
+
+//		case CARDT_DRIVER:
+//		case CARDT_SET:
+//		case CARDT_GATHER:
+//		case CARDT_SIGNED:
+//		case CARDT_CHECKED:
+			//显示卡片信息
+//			EA_vCls();
+
+//			htoa(temp_buf, &CardInfo._CARD_NUMBER.detail_card_number.serial_number[0], 4);
+//			strcpy(strbuf, "卡号:   ");
+//			strcat(strbuf, temp_buf);
+//			DispStr_CE(0,0,strbuf,DISP_POSITION);
+
+//			GetCardType(CardInfo.card_type, temp);
+//			sprintf(strbuf, "类型: %s", temp);
+//			DispStr_CE(0,2,strbuf,DISP_POSITION);
+
+//             sprintf(strbuf, "余额:    0.0元", fbuf);
+//             DispStr_CE(0,4,strbuf,DISP_POSITION);
+
+//			DispStr_CE(0,6,"按任意键退出",DISP_CENTER);     
+//			Beep(300);
+//			delay_and_wait_key(5, 0, 0);
+//			(void)EA_ucMIFHalt(hMifsHandle)();	//挂卡
+//			return ok;
+
+		default:
+			EA_vDisp(1,1,"   设备不支持此卡!  ");
+			//(void)EA_ucMIFHalt(hMifsHandle)();	//挂卡
+			(void)EA_ucMIFHalt(hMifsHandle);
+			return ok;
+	}
+
+}
+/******************************************************************************
+ 函数名称：M1_Driver_Card_Process
+ 功能描述：M1司机卡处理流程
+ 参数描述：
+ 参数名称： 输入/输出？ 类型        描述
+ 无输入      输出状态码
+
+
+ 返  回  值：ok(0)-成功
+			 notok(0xFF)-失败
+
+ 作      者 ：myron
+ 日      期：2005-02-17
+ 修改历史：
+		日期        修改人      修改描述
+		------      ---------   -------------
+******************************************************************************/
+INT8U M1_Driver_Card_Process(void)
+{
+	return ok;
+}
+
+/* *****************************************************************************
+ 函数名称：M1_Set_Card_Process
+ 功能描述：M1票价车号线路设置卡流程
+ 参数描述：
+ 参数名称：	输入/输出？	类型		描述
+无输入		输出状态码
+ 
+ 返  回  值：ok(0)-成功
+			 notok(0xFF)-失败
+				   
+ 作      者	：myron
+ 日      期：2005-02-16
+ 修改历史：
+		日期		修改人		修改描述
+		------		---------	-------------
+***************************************************************************** */
+INT8U M1_Set_Card_Process(void)
+{
+	return ok;
+}
+
+/******************************************************************************
+ 函数名称：M1_Checked_Card_Process
+ 功能描述：M1检测卡处理流程
+ 参数描述：
+ 参数名称：	输入/输出？	类型		描述
+无输入		输出状态码
+ 
+ 返  回  值：ok(0)-成功
+			 notok(0xFF)-失败
+				   
+ 作      者	：myron
+ 日      期：2005-02-16
+ 修改历史：
+		日期		修改人		修改描述
+		------		---------	-------------
+******************************************************************************/
+INT8U M1_Checked_Card_Process()
+{
+/*	
+	INT8U LOCAL_V_TYPE  i = 0;
+	INT8U LOCAL_V_TYPE  j = 0;
+	INT8U LOCAL_V_TYPE  m = 0;
+//	INT16U LOCAL_V_TYPE k = 0;
+	INT16U LOCAL_V_TYPE temp_int16u;
+	INT8S LOCAL_V_TYPE g = 0;
+//	INT8S LOCAL_V_TYPE h = 0;
+
+	INT8U  block_buffer1[16] = {0};
+	INT8U  block_buffer2[16] = {0};
+
+	////////////////////////////////////////
+	//验证Sector 6 密钥
+	////////////////////////////////////////
+	i=Sector6_Process();
+	if ( i!=ok )
+		return notok;
+
+// 	////////////////////////////////////////////////////////
+// 	//出错判断
+// 	////////////////////////////////////////////////////////
+// 	if ( ErrCardInfo.error_occured == TRUE )  //保证了交易序号可断不可重，交易序号为数据库中主键之一
+// 	{
+// 		//出错卡重入
+// 		memcpy(&ErrCardInfo.block24_buf_to_restore[12], "\x18\xE7\x18\xE7", 4);		//强制置为0x18E7
+// 		i = CardMFCWrite16Bytes(24, &ErrCardInfo.block24_buf_to_restore[0]);
+// 		if ( i != ok )
+// 			return notok;
+//
+// 		i = CardMFCWrite16Bytes(25, &ErrCardInfo.block24_buf_to_restore[0]);
+// 		if ( i != ok )
+// 			return notok;
+// 	}
+// 	else
+// 	{		//第一次入卡处理
+// 		////////////////////////////////////////
+// 		//卡内交易计数器处理
+// 		////////////////////////////////////////
+// 		memcpy(&CardInfo.init_purchase_serial_num[0], block_buffer1+2, 2);				//初始交易序号
+// 		memcpy(&temp_int16u, block_buffer1+2, 2);														//初始交易序号
+// 		if ( temp_int16u >= 0xFFFF )
+// 			temp_int16u = 0;
+// 		else
+// 			temp_int16u++;
+// 		memcpy(&CardInfo.purchase_serial_num[0], &temp_int16u, 2);						//+1后的交易序号
+//
+// 		memcpy(&ErrCardInfo.block24_buf_to_restore[0], block_buffer1, 16);				//凑24区应该写入的数据
+// 		memcpy(&ErrCardInfo.block24_buf_to_restore[2], &CardInfo.purchase_serial_num[0], 2);
+// 		memcpy(&ErrCardInfo.block24_buf_to_restore[12], "\x18\xE7\x18\xE7", 4);		//强制置为0x18E7
+// 		i = CardMFCWrite16Bytes(24, &ErrCardInfo.block24_buf_to_restore[0]);
+// 		if ( i != ok )
+// 			return notok;
+//
+// 		i = CardMFCWrite16Bytes(25, &ErrCardInfo.block24_buf_to_restore[0]);
+// 		if ( i != ok )
+// 			return notok;
+//
+// 	}
+	CardInfo.psam_purchase_serial_num = 0;//PSAM卡交易序号清零
+//	CardInfo.card_purchase_type= 0x10;
+
+	////////////////////////////////////////
+	//验证Sector 11 密钥
+	////////////////////////////////////////
+	i = Get_Sector_PermissionA(11, &KeySector[11][0]);
+	if ( i != ok )
+		return notok;
+
+	i = CardMFCRead16Bytes(44, block_buffer1);
+	if ( i != ok )
+		return notok;
+
+	CardInfo.checked_flag= block_buffer1[3];//保存检测标志
+	memcpy(&CardInfo.manager_number.checker_number[0],block_buffer1,sizeof(CardInfo.manager_number.checker_number));//保存检测员编号
+	CardInfo.card_purchase_type=TT_CHECK;
+*/
+	return ok;
+}
+
+/******************************************************************************
+ 函数名称：M1_Inspector_Card_Process
+ 功能描述：M1稽查卡处理流程
+ 参数描述：
+ 参数名称：	输入/输出？	类型		描述
+无输入		输出状态码
+ 
+ 返  回  值：ok(0)-成功
+			 notok(0xFF)-失败
+				   
+ 作      者	：myron
+ 日      期：2005-02-16
+ 修改历史：
+		日期		修改人		修改描述
+		------		---------	-------------
+******************************************************************************/
+INT8U M1_Inspector_Card_Process(void)
+{
+	return ok;
+}
+
+/******************************************************************************
+ 函数名称：M1_Signed_Card_Process
+ 功能描述：M1签点卡处理流程
+ 参数描述：
+ 参数名称： 输入/输出？ 类型		描述
+无输入		输出状态码
+ 
+ 返  回  值：ok(0)-成功
+			 notok(0xFF)-失败
+				   
+ 作 	 者 ：myron
+ 日 	 期：2005-02-16
+ 修改历史：
+		日期		修改人		修改描述
+		------		---------	-------------
+******************************************************************************/
+INT8U M1_Signed_Card_Process()
+{
+/*	
+	INT8U LOCAL_V_TYPE  i = 0;
+	INT8U LOCAL_V_TYPE  j = 0;
+	INT8U LOCAL_V_TYPE  m = 0;
+	INT16U LOCAL_V_TYPE temp_int16u;
+	INT8S LOCAL_V_TYPE g = 0;
+	INT8U block_buffer1[16] = {0};
+	INT8U block_buffer2[16] = {0};
+
+	////////////////////////////////////////
+	//验证Sector 6 密钥
+	////////////////////////////////////////
+	i=Sector6_Process();
+	if ( i!=ok )
+		return notok;
+
+// 	////////////////////////////////////////////////////////
+// 	//出错判断
+// 	////////////////////////////////////////////////////////
+// 	if ( ErrCardInfo.error_occured == TRUE )  //保证了交易序号可断不可重，交易序号为数据库中主键之一
+// 	{
+// 		//出错卡重入
+// 		memcpy(&ErrCardInfo.block24_buf_to_restore[12], "\x18\xE7\x18\xE7", 4);		//强制置为0x18E7
+// 		i = CardMFCWrite16Bytes(24, &ErrCardInfo.block24_buf_to_restore[0]);
+// 		if ( i != ok )
+// 			return notok;
+//
+// 		i = CardMFCWrite16Bytes(25, &ErrCardInfo.block24_buf_to_restore[0]);
+// 		if ( i != ok )
+// 			return notok;
+// 	}
+// 	else
+// 	{		//第一次入卡处理
+// 		////////////////////////////////////////
+// 		//卡内交易计数器处理
+// 		////////////////////////////////////////
+// 		memcpy(&CardInfo.init_purchase_serial_num[0], block_buffer1+2, 2);				//初始交易序号
+// 		memcpy(&temp_int16u, block_buffer1+2, 2);														//初始交易序号
+// 		if ( temp_int16u >= 0xFFFF )
+// 			temp_int16u = 0;
+// 		else
+// 			temp_int16u++;
+// 		memcpy(&CardInfo.purchase_serial_num[0], &temp_int16u, 2);						//+1后的交易序号
+//
+// 		memcpy(&ErrCardInfo.block24_buf_to_restore[0], block_buffer1, 16);				//凑24区应该写入的数据
+// 		memcpy(&ErrCardInfo.block24_buf_to_restore[2], &CardInfo.purchase_serial_num[0], 2);
+// 		memcpy(&ErrCardInfo.block24_buf_to_restore[12], "\x18\xE7\x18\xE7", 4);		//强制置为0x18E7
+// 		i = CardMFCWrite16Bytes(24, &ErrCardInfo.block24_buf_to_restore[0]);
+// 		if ( i != ok )
+// 			return notok;
+//
+// 		i = CardMFCWrite16Bytes(25, &ErrCardInfo.block24_buf_to_restore[0]);
+// 		if ( i != ok )
+// 			return notok;
+//
+// 	}
+	CardInfo.psam_purchase_serial_num = 0;//PSAM卡交易序号清零
+//	CardInfo.card_purchase_type= 0x10;
+
+	////////////////////////////////////////
+	//验证Sector 11 密钥
+	////////////////////////////////////////
+	i = Get_Sector_PermissionA(11, &KeySector[11][0]);
+	if ( i != ok )
+		return notok;
+
+	i = CardMFCRead16Bytes(44, block_buffer1);
+	if ( i != ok )
+		return notok;
+
+	memcpy(&CardInfo.manager_number.signer_number[0],block_buffer1,sizeof(CardInfo.manager_number.signer_number));//保存签点员编号
+	memcpy(&CardInfo.station_number[0],block_buffer1+5,sizeof(CardInfo.station_number));//保存站点编号
+	CardInfo.card_purchase_type = TT_SIGN;
+*/
+	return ok;
+}
+
+/******************************************************************************
+ 函数名称：M1_Gather_Card_Process
+ 功能描述：M1采集卡处理流程
+ 参数描述：
+ 参数名称：	输入/输出？	类型		描述
+无输入		输出状态码
+ 
+ 返  回  值：ok(0)-成功
+			 notok(0xFF)-失败
+				   
+ 作      者	：myron
+ 日      期：2005-02-16
+ 修改历史：
+		日期		修改人		修改描述
+		------		---------	-------------
+******************************************************************************/
+INT8U M1_Gather_Card_Process()
+{
+/*	
+	INT8U LOCAL_V_TYPE  i = 0;
+	INT8U LOCAL_V_TYPE  j = 0;
+	INT8U LOCAL_V_TYPE  m = 0;
+	INT16U LOCAL_V_TYPE temp_int16u;
+	INT8S LOCAL_V_TYPE g = 0;
+	INT8U block_buffer1[16] = {0};
+	INT8U block_buffer2[16] = {0};
+
+	////////////////////////////////////////
+	//验证Sector 6 密钥
+	////////////////////////////////////////
+	i = Get_Sector_PermissionA(6, &KeySector[6][0]);
+	if ( i != ok )
+		return notok;
+
+	i = CardMFCRead16Bytes(24, block_buffer1);
+	if ( i != ok )
+		return notok;
+
+	////////////////////////////////////////
+	//判断此卡是否已经置黑名单标志
+	////////////////////////////////////////
+	if ( block_buffer1[6] == 0x04 )
+	{
+		printf_debug("非法卡");
+		return notok;
+	}
+
+//     i = CardMFCRead16Bytes(25, block_buffer2);
+//     if ( i != ok )
+//         return notok;
+
+	if ( DevStat.driver_is_working == TRUE )
+	{
+// 		DevStat.driver_is_working = FALSE;
+// 		CardInfo.card_purchase_type = TT_DRIVER_REST;
+// 		WriteParam();
+		QuitWorkProcess();
+		return ok;
+	}
+
+	CardInfo.psam_purchase_serial_num = 0;										//PSAM卡交易序号清零
+
+	////////////////////////////////////////
+	//验证Sector 11 密钥
+	////////////////////////////////////////
+	i = Get_Sector_PermissionA(11, &KeySector[11][0]);
+	if ( i != ok )
+		return notok;
+
+	i = CardMFCRead16Bytes(44, block_buffer1);
+	if ( i != ok )
+		return notok;
+
+	DevStat.allow_upload_data = TRUE;//允许采集
+	memcpy(&CardInfo.manager_number.gather_number[0],block_buffer1,sizeof(CardInfo.manager_number.gather_number));//保存采集员编号
+	CardInfo.card_purchase_type = TT_MANAGE;
+*/
+	return ok;
+}
+
+/******************************************************************************
+ 函数名称：M1_Favor_Card_Process()
+ 功能描述：M1采集卡处理流程
+ 参数描述：
+ 参数名称：	输入/输出？	类型		描述
+无输入		输出状态码
+ 
+ 返  回  值：ok(0)-成功
+			 notok(0xFF)-失败
+				   
+ 作      者	：myron
+ 日      期：2005-02-22
+ 修改历史：
+		日期		修改人		修改描述
+		------		---------	-------------
+******************************************************************************/
+// INT8U M1_Favor_Card_Process()
+// {
+//     INT8U LOCAL_V_TYPE  i = 0;
+//     INT8U LOCAL_V_TYPE  j = 0;
+//     INT8U LOCAL_V_TYPE  m = 0;
+//     INT16U LOCAL_V_TYPE temp_int16u;
+//     INT8S LOCAL_V_TYPE g = 0;
+//     INT8U block_buffer1[16] = {0};
+//     INT8U block_buffer2[16] = {0};
+//     INT16U LOCAL_V_TYPE temp_balance;
+//     ////////////////////////////////////////
+//     //验证Sector 6 密钥
+//     ////////////////////////////////////////
+//     i=Sector6_Process();
+//     if ( i!=ok )
+//         return notok;
+//
+//     ////////////////////////////////////////////////////////
+//     //出错判断
+//     ////////////////////////////////////////////////////////
+//     if ( ErrCardInfo.error_occured == TRUE )  //保证了交易序号可断不可重，交易序号为数据库中主键之一
+//     {
+//         //出错卡重入
+//         memcpy(&ErrCardInfo.block24_buf_to_restore[12], "\x18\xE7\x18\xE7", 4);     //强制置为0x18E7
+//         i = CardMFCWrite16Bytes(24, &ErrCardInfo.block24_buf_to_restore[0]);
+//         if ( i != ok )
+//             return notok;
+//
+//         i = CardMFCWrite16Bytes(25, &ErrCardInfo.block24_buf_to_restore[0]);
+//         if ( i != ok )
+//             return notok;
+//     }
+//     else
+//     {       //第一次入卡处理
+//         ////////////////////////////////////////
+//         //卡内交易计数器处理
+//         ////////////////////////////////////////
+//         memcpy(&CardInfo.init_purchase_serial_num[0], block_buffer1+2, 2);              //初始交易序号
+//         memcpy(&temp_int16u, block_buffer1+2, 2);                                                       //初始交易序号
+//         if ( temp_int16u >= 0xFFFF )
+//             temp_int16u = 0;
+//         else
+//             temp_int16u++;
+//         memcpy(&CardInfo.purchase_serial_num[0], &temp_int16u, 2);                      //+1后的交易序号
+//
+//         memcpy(&ErrCardInfo.block24_buf_to_restore[0], block_buffer1, 16);              //凑24区应该写入的数据
+//         memcpy(&ErrCardInfo.block24_buf_to_restore[2], &CardInfo.purchase_serial_num[0], 2);
+//         memcpy(&ErrCardInfo.block24_buf_to_restore[12], "\x18\xE7\x18\xE7", 4);     //强制置为0x18E7
+//         i = CardMFCWrite16Bytes(24, &ErrCardInfo.block24_buf_to_restore[0]);
+//         if ( i != ok )
+//             return notok;
+//
+//         i = CardMFCWrite16Bytes(25, &ErrCardInfo.block24_buf_to_restore[0]);
+//         if ( i != ok )
+//             return notok;
+//
+//     }
+//     CardInfo.psam_purchase_serial_num = 0;//PSAM卡交易序号清零
+//     //  CardInfo.card_purchase_type= 0x10;
+//     //add hu
+//     ////////////////////////////////////////
+//     //根据卡类型算出消费金额
+//     ////////////////////////////////////////
+//     CardInfo.fare = GetFare(CardInfo.card_type);
+//     //检查钱包金额
+//     i=Check_Money();
+//     if ( i!=ok )
+//         return notok;
+//     //金额够消费
+//     ////////////////////////////////////////
+//     //验证Sector 10 密钥
+//     ////////////////////////////////////////
+//     i = Get_Sector_PermissionA(10, &KeySector[10][0]);
+//     if ( i != ok )
+//         return notok;
+//
+//     i = CardMFCRead16Bytes(41, block_buffer1);
+//     if ( i != ok )
+//         return notok;
+//
+//     i = CardMFCRead16Bytes(42, block_buffer2);
+//     if ( i != ok )
+//         return notok;
+//
+//     i = Favor_Block_Is_Right(block_buffer1);
+//     j = Favor_Block_Is_Right(block_buffer2);
+//     if ( (i == ok) && (j == ok) )
+//     {
+//         //两区都合法，看两区数据是否一致
+//         g = memcmp(block_buffer1, block_buffer2, 16);
+//         if ( g == ok )
+//         {
+//             //两区一致，什么也不做
+//             ;
+//         }
+//         else
+//         {
+//             //两区不一致，以41区为主
+//             m = CardMFCWrite16Bytes(42,block_buffer1);
+//             if ( m != ok )
+//                 return notok;
+//         }
+//
+//     }
+//     else if ( i == ok )
+//     {
+//         // 41区合法，41->42
+//         m = CardMFCWrite16Bytes(42,block_buffer1);
+//         if ( m != ok )
+//             return notok;
+//     }
+//     else if ( j == ok )
+//     {
+//         // 42区合法，42->41
+//         m = CardMFCWrite16Bytes(41,block_buffer2);
+//         if ( m != ok )
+//             return notok;
+//         memcpy(block_buffer1, block_buffer2, 16);//好的数据传给block_buffer1，下边处理数据用block_buffer1
+//     }
+//     else
+//     {
+//         //两区都不合法，退出
+//         return notok;
+//     }
+//     i = memcmp(block_buffer1,&CardInfo.card_in_time.year, 3);       //p0+119是世纪位
+//     //时间相等，扣除次数
+//     if ( i == 0 )
+//     {
+//         //相等，扣一次
+//         memcpy(&temp_balance, &block_buffer1[3], 2);
+//         if ( temp_balance == 0 )
+//         {
+//             //优惠次数已扣光，当作普通卡消费
+//             CardInfo.card_type= CARDT_NORMAL;
+//             memcpy(&block_buffer1[5],&CardInfo.card_in_time, 7);    //写入当(上)次交易日期时间
+//             memcpy(&block_buffer1[12], "\x29\xD6\x29\xD6", 4);//强制置为0x29d6
+//             /////////////////////////////////////////
+//             //扣次数处理
+//             /////////////////////////////////////////
+//             i = CardMFCWrite16Bytes(41,block_buffer1);
+//             if ( i != ok )
+//             {//扣次数出错处理，记录出错卡卡号和原次数余额
+//                 memcpy(&ErrCardInfo.m1_card_number[0], &CardInfo._CARD_NUMBER.detail_card_number.serial_number[0], 4);  //保存出错M1卡卡号
+//                 memcpy(&ErrCardInfo.csn[0], &CardInfo.csn[0], 4);               //保存出错M1卡硬件卡号
+//                 ErrCardInfo.init_time_balance = CardInfo.init_time_balance;                 //保存出错M1卡原次数余额
+//                 ErrCardInfo.error_occured = TRUE;
+//                 DevStat.purchase_again_req = TRUE;      //申请重新刷卡语音
+//                 DevStat.voice_purchase_again_freq=100;
+//                 return notok;
+//             }
+//             i = CardMFCWrite16Bytes(42,block_buffer1);
+//             if ( i != ok )
+//             {   //扣款出错处理，记录出错卡卡号和原余额
+//                 memcpy(&ErrCardInfo.m1_card_number[0], &CardInfo._CARD_NUMBER.detail_card_number.serial_number[0], 4);  //保存出错M1卡卡号
+//                 memcpy(&ErrCardInfo.csn[0], &CardInfo.csn[0], 4);               //保存出错M1卡硬件卡号
+//                 ErrCardInfo.init_time_balance = CardInfo.init_time_balance;                 //保存出错M1卡原余额
+//                 ErrCardInfo.error_occured = TRUE;
+//                 DevStat.purchase_again_req = TRUE;      //申请重新刷卡语音
+//                 DevStat.voice_purchase_again_freq=100;
+//
+//                 return notok;
+//             }
+//         }
+//         else
+//         {
+//             //还有优惠次数
+//             temp_balance--;
+//
+// //          g_xunPreferential_Price_Num = preferential_times;
+//
+//             memcpy(&block_buffer1[3], &temp_balance, 2);        //优惠次数--后写回
+//
+//             memcpy(&block_buffer1[5], &CardInfo.card_in_time, 7);   //写入当(上)次交易日期时间
+//             memcpy(&block_buffer1[12], "\x29\xD6\x29\xD6", 4);//强制置为0x29d6
+//             /////////////////////////////////////////
+//             //扣次数处理
+//             /////////////////////////////////////////
+//             i = CardMFCWrite16Bytes(41,block_buffer1);
+//             if ( i != ok )
+//             {//扣次数出错处理，记录出错卡卡号和原次数余额
+//                 memcpy(&ErrCardInfo.m1_card_number[0], &CardInfo._CARD_NUMBER.detail_card_number.serial_number[0], 4);  //保存出错M1卡卡号
+//                 memcpy(&ErrCardInfo.csn[0], &CardInfo.csn[0], 4);               //保存出错M1卡硬件卡号
+//                 ErrCardInfo.init_time_balance = CardInfo.init_time_balance;                 //保存出错M1卡原次数余额
+//                 ErrCardInfo.error_occured = TRUE;
+//                 DevStat.purchase_again_req = TRUE;      //申请重新刷卡语音
+//                 DevStat.voice_purchase_again_freq=100;
+//                 return notok;
+//             }
+//             i = CardMFCWrite16Bytes(42,block_buffer1);
+//             if ( i != ok )
+//             {   //扣款出错处理，记录出错卡卡号和原余额
+//                 memcpy(&ErrCardInfo.m1_card_number[0], &CardInfo._CARD_NUMBER.detail_card_number.serial_number[0], 4);  //保存出错M1卡卡号
+//                 memcpy(&ErrCardInfo.csn[0], &CardInfo.csn[0], 4);               //保存出错M1卡硬件卡号
+//                 ErrCardInfo.init_time_balance = CardInfo.init_time_balance;                 //保存出错M1卡原余额
+//                 ErrCardInfo.error_occured = TRUE;
+//                 DevStat.purchase_again_req = TRUE;      //申请重新刷卡语音
+//                 DevStat.voice_purchase_again_freq=100;
+//
+//                 return notok;
+//             }
+//         }
+//     }
+//     else
+//     {
+//         //不相等，换月处理
+//         memcpy(&block_buffer1[0], &CardInfo.card_in_time.year, 3);      //更新有效年月
+//         switch ( CardInfo.card_type )
+//         {
+//             case 0x02:      //小学生卡
+//                 memcpy(&temp_balance, &DevStat.student_a_card_count, 2);
+//                 temp_balance--;
+//                 memcpy(&block_buffer1[3], &temp_balance, 2);        //优惠次数--后写回
+//                 break;
+//
+//             case 0x08:      //中学生卡
+//                 memcpy(&temp_balance, &DevStat.student_b_card_count, 2);
+//                 temp_balance--;
+//                 memcpy(&block_buffer1[3], &temp_balance, 2);        //优惠次数--后写回
+//                 break;
+//
+//             case 0x07:      //月票卡
+//                 memcpy(&temp_balance, &DevStat.emplory_b, 2);
+//                 temp_balance--;
+//                 memcpy(&block_buffer1[3], &temp_balance, 2);        //优惠次数--后写回
+//                 break;
+//
+//             default:
+//                 return 0xFF;            //此情况应该不存在
+//                 break;
+//         }
+//
+//         //g_xunPreferential_Price_Num = preferential_times;
+//         memcpy(&block_buffer1[5], &CardInfo.card_in_time, 7);   //写入当(上)次交易日期时间
+//         memcpy(&block_buffer1[12], "\x29\xD6\x29\xD6", 4);//强制置为0x29d6
+//         /////////////////////////////////////////
+//         //扣次数处理
+//         /////////////////////////////////////////
+//         i = CardMFCWrite16Bytes(41,block_buffer1);
+//         if ( i != ok )
+//         {//扣次数出错处理，记录出错卡卡号和原次数余额
+//             memcpy(&ErrCardInfo.m1_card_number[0], &CardInfo._CARD_NUMBER.detail_card_number.serial_number[0], 4);  //保存出错M1卡卡号
+//             memcpy(&ErrCardInfo.csn[0], &CardInfo.csn[0], 4);               //保存出错M1卡硬件卡号
+//             ErrCardInfo.init_time_balance = CardInfo.init_time_balance;                 //保存出错M1卡原次数余额
+//             ErrCardInfo.error_occured = TRUE;
+//             DevStat.purchase_again_req = TRUE;      //申请重新刷卡语音
+//             DevStat.voice_purchase_again_freq=100;
+//             return notok;
+//         }
+//         i = CardMFCWrite16Bytes(42,block_buffer1);
+//         if ( i != ok )
+//         {   //扣款出错处理，记录出错卡卡号和原余额
+//             memcpy(&ErrCardInfo.m1_card_number[0], &CardInfo._CARD_NUMBER.detail_card_number.serial_number[0], 4);  //保存出错M1卡卡号
+//             memcpy(&ErrCardInfo.csn[0], &CardInfo.csn[0], 4);               //保存出错M1卡硬件卡号
+//             ErrCardInfo.init_time_balance = CardInfo.init_time_balance;                 //保存出错M1卡原余额
+//             ErrCardInfo.error_occured = TRUE;
+//             DevStat.purchase_again_req = TRUE;      //申请重新刷卡语音
+//             DevStat.voice_purchase_again_freq=100;
+//
+//             return notok;
+//         }
+//         return 0xFD;
+//     }
+//     //按优惠金额扣钱
+//     i=M1_Card_Consume_Process();
+//     if ( i!=ok )
+//         return notok;
+// 	return ok;
+// }
+
+INT8U CardMFCValueWithTransfer(int flag, int s_block, int d_block, ulong num)
+{
+	INT8U ucResult;
+
+	if(flag == 0)//decrement
+	{
+		ucResult = EA_ucMIFDecrement (hMifsHandle, s_block,num);
+		if (ucResult != EM_SUCCESS)
+		{
+			return notok;
+		}
+		/* 将递增后第14块内容备份到第13块中，这样，第13块也成为数值块，数值为125*/
+		ucResult = EA_ucMIFTransfer (hMifsHandle, d_block);
+		if (ucResult != EM_SUCCESS)
+		{
+			return notok;
+		}
+	}
+	if(flag == 1)//increment
+	{
+		ucResult = EA_ucMIFIncrement(hMifsHandle, s_block,num);
+		if (ucResult != EM_SUCCESS)
+		{
+			return notok;
+		}
+		/* 将递增后第14块内容备份到第13块中，这样，第13块也成为数值块，数值为125*/
+		ucResult = EA_ucMIFTransfer (hMifsHandle, d_block);
+		if (ucResult != EM_SUCCESS)
+		{
+			return notok;
+		}
+	}
+	return ok;
+}
+
+/*****************************************************************
+ 函数原型：M1_Card_Consume_Process
+ 功能描述：M1消费卡扣款流程
+ 参数描述：
+ 参数名称：	输入/输出？	类型		描述
+				
+				
+ 返  回  值：	ok(0)-消费成功		
+				0xFF-消费失败
+				//0xFC-不是本系统卡
+				//0xFD-有卡出错，但没有回该卡
+				0xF0-重新刷卡
+ 作      者	：许岩
+ 日      期：2004-09-27
+ 修改历史：
+		日期		修改人		修改描述
+		2005.2.21		myron			in function
+*****************************************************************/
+INT8U M1_Card_Consume_Process(void)
+{
+	
+	INT8U   LOCAL_V_TYPE    i = 0;
+	INT8U   LOCAL_V_TYPE    j = 0;
+	INT8U   LOCAL_V_TYPE    m = 0;
+	INT16U  LOCAL_V_TYPE    temp_int16u;
+	INT8S   LOCAL_V_TYPE    g = 0;
+	INT8U   LOCAL_V_TYPE    block_buffer1[16] = {0};
+	INT8U   LOCAL_V_TYPE    block_buffer2[16] = {0};
+	INT8U   LOCAL_V_TYPE    block9[16];
+	INT8U   LOCAL_V_TYPE    block10[16];
+	float   zero=0;
+	//float temp_data;
+	//INT8U 	const  			zero[4] = {0,0,0,0};
+	INT32U  LOCAL_V_TYPE    temp_balance;
+//     INT8U   LOCAL_V_TYPE    zero_balance_counter ;
+
+
+
+	////////////////////////////////////////
+	//验证Sector 6 密钥
+	////////////////////////////////////////
+	if(M1CardInit() != ok)
+	{
+		EA_ucMIFHalt(hMifsHandle);	//挂卡
+		return notok;
+	}
+	
+	//i = Get_Sector_PermissionA(6, &KeySector[6][0]);
+	i = Get_Sector_PermissionB(6, &KeySector[6][0]);
+	if ( i != ok )
+	{
+		return notok;
+	}
+
+	i = EA_ucMIFRead(hMifsHandle, 24, block_buffer1);
+	if ( i != ok )
+	{
+		lcddisperr("fail1");
+		return notok;
+	}
+
+	i = EA_ucMIFRead(hMifsHandle, 25, block_buffer2);
+	if ( i != ok )
+	{
+		lcddisperr("fail2");
+		return notok;
+	}
+		
+	i = Sec6_Block_Is_Legal(block_buffer1);
+	j = Sec6_Block_Is_Legal(block_buffer2);
+	if ( (i == ok) && (j == ok) )
+	{
+		//两区都合法，看两区数据是否一致
+		g = memcmp(block_buffer1, block_buffer2, 16);
+		if ( g == ok )
+		{
+			//两区一致，什么也不做
+			;
+		}
+		else
+		{
+			//两区不一致，以24区为主
+			m = EA_ucMIFWrite (hMifsHandle, 25, block_buffer1);//CardMFCWrite16Bytes(25,block_buffer1);
+			if ( m != ok )
+			{
+//  			lcddisperr("fail3");
+				return notok;
+			}
+				
+		}
+
+	}
+	else if ( i == ok )
+	{
+		//24区合法，24->25
+		m = EA_ucMIFWrite (hMifsHandle, 25, block_buffer1);//CardMFCWrite16Bytes(25,block_buffer1);
+		if ( m != ok )
+		{
+//  		lcddisperr("fail4");
+			return notok;
+		}
+
+	}
+	else if ( j == ok )
+	{
+		//25区合法，25->24
+		m = EA_ucMIFWrite (hMifsHandle, 24, block_buffer2);//CardMFCWrite16Bytes(24,block_buffer2);
+		if ( m != ok )
+		{
+//  		lcddisperr("fai222l4");
+			return notok;
+		}
+		memcpy(block_buffer1, block_buffer2, 16);//好的数据传给block_buffer1，下边处理数据用block_buffer1
+	}
+	else
+	{
+		//两区都不合法，退出
+//  	lcddisperr("fail114");
+		return notok;
+	}
+
+	////////////////////////////////////////
+	//判断此卡是否已经置黑名单标志
+	////////////////////////////////////////
+	if ( block_buffer1[7] == 0x04 )
+	{
+		printf_debug((char *)"非法卡");
+		return notok;
+	}
+
+
+	CardInfo.credit_rec_pos = block_buffer1[8];       //圈存记录指针
+		
+	if(CardInfo.credit_rec_pos == 0x00 ||CardInfo.credit_rec_pos == 0xFF)
+		CardInfo.credit_rec_pos = 0x0C;
+	else
+		CardInfo.credit_rec_pos ++;
+
+	if(CardInfo.credit_rec_pos==0x0f ||CardInfo.credit_rec_pos==0x13 )
+		CardInfo.credit_rec_pos ++;
+	if(CardInfo.credit_rec_pos>=0x17)
+		CardInfo.credit_rec_pos=0x0C;
+
+	////////////////////////////////////////////////////////
+	//出错判断
+	////////////////////////////////////////////////////////
+	if ( ErrCardInfo.error_occured == TRUE )							  //保证了交易序号可断不可重，交易序号为数据库中主键之一
+	{
+		//出错卡重入
+		memcpy(&ErrCardInfo.block24_buf_to_restore[12], "\x18\xE7\x18\xE7", 4);		//强制置为0x18E7
+		i =  EA_ucMIFWrite (hMifsHandle, 24, &ErrCardInfo.block24_buf_to_restore[0]);//CardMFCWrite16Bytes(24, &ErrCardInfo.block24_buf_to_restore[0]);
+		if ( i != ok )
+		{
+//  		lcddisperr("fail5");
+			return notok;
+		}
+			
+		i = EA_ucMIFWrite (hMifsHandle, 25, &ErrCardInfo.block24_buf_to_restore[0]);//CardMFCWrite16Bytes(25, &ErrCardInfo.block24_buf_to_restore[0]);
+		if ( i != ok )
+		{
+//  		lcddisperr("fail6");
+			return notok;
+		}
+			
+	}
+	else
+	{		//第一次入卡处理 
+		////////////////////////////////////////
+		//卡内交易计数器处理
+		////////////////////////////////////////
+		CardInfo.init_purchase_serial_num[0] = block_buffer1[0];				//初始交易序号
+		CardInfo.init_purchase_serial_num[1] = block_buffer1[1];
+		temp_int16u = ((INT16U)block_buffer1[0] << 8) | (INT16U)block_buffer1[1];				//初始交易序号
+		if ( temp_int16u >= 0xFFFF )
+			temp_int16u = 0;
+		else
+			temp_int16u++;
+//  	CardInfo.purchase_serial_num[0] = (INT8U)(temp_int16u >> 8);						//+1后的交易序号,,,,移位计算
+//  	CardInfo.purchase_serial_num[1] = (INT8U)temp_int16u;
+
+		CardInfo.purchase_serial_num[0] = (INT8U)(temp_int16u / 0x100 );						//+1后的交易序号,,,,移位计算
+		CardInfo.purchase_serial_num[1] = (INT8U)(temp_int16u % 0x100 );
+
+		memcpy(&ErrCardInfo.block24_buf_to_restore[0], block_buffer1, 16);				//凑24区应该写入的数据
+		memcpy(&ErrCardInfo.block24_buf_to_restore[0], &CardInfo.purchase_serial_num[0], 2);
+		memcpy(&ErrCardInfo.block24_buf_to_restore[12], "\x18\xE7\x18\xE7", 4);		//强制置为0x18E7
+		i = EA_ucMIFWrite (hMifsHandle, 24, &ErrCardInfo.block24_buf_to_restore[0]);//CardMFCWrite16Bytes(24, &ErrCardInfo.block24_buf_to_restore[0]);
+		if ( i != ok )
+		{
+//  		lcddisperr("fail7");
+			return notok;
+		}
+			
+		i = EA_ucMIFWrite (hMifsHandle, 25, &ErrCardInfo.block24_buf_to_restore[0]);//CardMFCWrite16Bytes(25, &ErrCardInfo.block24_buf_to_restore[0]);
+		if ( i != ok )
+		{
+//  		lcddisperr("fail8");
+			return notok;
+		}
+			
+
+	}
+
+	CardInfo.psam_purchase_serial_num = 0;										//PSAM卡交易序号清零
+
+	////////////////////////////////////////
+	//验证Sector 2 密钥
+	////////////////////////////////////////
+//  if(M1CardInit() !=ok)
+//  	return notok;
+	
+	//i = Get_Sector_PermissionA(2, &KeySector[2][0]);
+	i = Get_Sector_PermissionB(2, &KeySector[2][0]);
+	if ( i != ok )
+	{
+//  	lcddisperr("fail9");
+		return notok;
+	}
+		
+
+	i = EA_ucMIFRead(hMifsHandle, 9, block9);
+	if ( i != ok )
+	{
+//  	lcddisperr("fail10");
+		return notok;
+	}
+
+
+	i = EA_ucMIFRead(hMifsHandle, 10, block10);
+	if ( i != ok )
+//  	lcddisperr("fail11");
+		return notok;
+
+	i = Purse_Block_Is_Right(block9);
+	j = Purse_Block_Is_Right(block10);
+	if ( (i == ok) && (j == ok) )
+	{	//两区都合法，看两区数据是否一致
+		g = memcmp(block9, block10, 16);
+		if ( g == ok )
+		{
+			;			//两区一致，什么也不做
+		}
+		else
+		{
+			//两区不一致，以9块为主
+			m = CardMFCValueWithTransfer(PICC_DECREMENT, 9, 10, zero);	  //两区不一致，以9块为主
+			if ( m != ok )
+//  			lcddisperr("fail12");
+				return notok;
+		}
+	}
+	else if ( i == ok )
+	{
+//         m = Write(10, block9);              //9区合法，9->10
+		m = CardMFCValueWithTransfer(PICC_DECREMENT, 9, 10, zero);	   //9区合法，9->10
+		if ( m != ok )
+//  		lcddisperr("fail13");
+			return notok;
+	}
+	else if ( j == ok )
+	{
+//         m = Write(9, block10);          //10区合法，10->9
+		m = CardMFCValueWithTransfer(PICC_DECREMENT, 10, 9, zero);	  //10区合法，10->9
+		if ( m != ok )
+//  		lcddisperr("fail14");
+			return notok;
+		memcpy(block9, block10, 16);		//好的数据传给block9下边处理数据用block9
+	}
+	else
+	{
+//  	lcddisperr("fail15");
+		return notok;		//两区都不合法，退出
+	}
+
+
+
+	////////////////////////////////////////
+	//出错卡扣款处理
+	////////////////////////////////////////
+	if ( ErrCardInfo.error_occured == TRUE )
+	{	//出错卡回卡处理，分两种情况，一种是已经扣过款了，令一种是还没扣过款
+		temp_balance = BlockToCash(block9);
+		if ( temp_balance == ErrCardInfo.init_balance )
+		{	//扣款没成功
+			//往下接着走第一次扣款处理
+		}
+		else
+		{	//扣款成功(包括其他情况，也算扣款成功)
+			CardInfo.balance = temp_balance;//储存交易后余额
+
+			//if ( (DevStat.oldman_free == TRUE && CardInfo.card_type == CARDT_OLDMAN)
+			//	 || (DevStat.employee_a_free == TRUE && CardInfo.card_type == CARDT_FREE)
+			//	 || (DevStat.driver_free == TRUE && CardInfo.card_type == CARDT_DRIVER) )
+			//{
+			//	CardInfo.card_purchase_type = TT_FREE;	//免费卡交易
+			//}
+			
+			//else
+			//{
+			CardInfo.card_purchase_type = TT_NORMAL_CONSUME_MONEY;//普通卡正常交易
+			//}
+
+			return ok;
+		}
+	}
+
+	////////////////////////////////////////
+	//第一次入卡扣款处理
+	////////////////////////////////////////
+	if ( ErrCardInfo.error_occured == FALSE )			//只有在第一次入卡时，才保存初始余额，以后雷打不动
+	{
+		CardInfo.init_balance = BlockToCash(block9);
+	}
+
+//  EA_vDisplay(1, "%04d", (int)CardInfo.init_balance );
+//  EA_vDisplay(2, "%04d", (int)CardInfo.fare );
+//  EA_vDisplay(3, "%02d", (int)ErrCardInfo.error_occured );
+//  EA_uiInkey(0);
+	if ( CardInfo.init_balance < CardInfo.fare )
+	{
+		//余额不足处理
+		lcddisperr((char *)"   余额不足请充值   ");
+		memset(&CardInfo, 0x00, sizeof(CardInfo));		//清卡片交易信息		
+		memset(&ErrCardInfo, 0x00, sizeof(ErrCardInfo));	//清出错卡信息
+		DevStat.purchase_again_req = FALSE;//清重新刷卡语音标志
+		DevStat.voice_purchase_again_freq = 0;
+//  	lcddisperr("fai3l4");
+		return notok;
+	}
+
+	if( ErrCardInfo.error_occured == FALSE )
+	{
+		StoreGrayRecord();
+	}
+
+// 	SleepMs(500);
+//	i = CardMFCValueWithTransfer(PICC_DECREMENT, 9, 9,CashToBlock(CardInfo.fare));
+	i = CardMFCValueWithTransfer(PICC_DECREMENT, 9, 9, CardInfo.fare);
+
+	if ( i != ok )
+	{	//扣款出错处理，记录出错卡卡号和原余额
+		memcpy(&ErrCardInfo.m1_card_number[0], &CardInfo._CARD_NUMBER.detail_card_number.serial_number[0], 4);	//保存出错M1卡卡号
+		memcpy(&ErrCardInfo.csn[0], &CardInfo.csn[0], 4);				//保存出错M1卡硬件卡号
+		ErrCardInfo.init_balance = CardInfo.init_balance;					//保存出错M1卡原余额
+		ErrCardInfo.error_occured = TRUE;
+		DevStat.purchase_again_req = TRUE;		//申请重新刷卡语音
+		DevStat.voice_purchase_again_freq = 100;
+// 		return notok;
+		EA_ucMIFHalt(hMifsHandle);	//挂卡
+		return 0xF0;
+	}
+	i = CardMFCValueWithTransfer(PICC_DECREMENT, 9, 10, 0);
+	if ( i != ok )
+	{	//扣款出错处理，记录出错卡卡号和原余额
+		memcpy(&ErrCardInfo.m1_card_number[0], &CardInfo._CARD_NUMBER.detail_card_number.serial_number[0], 4);	//保存出错M1卡卡号
+		memcpy(&ErrCardInfo.csn[0], &CardInfo.csn[0], 4);				//保存出错M1卡硬件卡号
+		ErrCardInfo.init_balance = CardInfo.init_balance;					//保存出错M1卡原余额
+		ErrCardInfo.error_occured = TRUE;
+		DevStat.purchase_again_req = TRUE;		//申请重新刷卡语音
+		DevStat.voice_purchase_again_freq = 100;
+// 		return notok;
+//  	lcddisperr("fai4l4");
+		EA_ucMIFHalt(hMifsHandle);	//挂卡
+		return 0xF0;
+	}
+
+	CardInfo.balance = CardInfo.init_balance - CardInfo.fare;//储存交易后余额
+//	CardInfo.card_purchase_type = TT_NORMAL_CONSUME_MONEY;	//冲帐交易类型
+	CardInfo.card_purchase_type = TT_NORMAL_CONSUME_MONEY;//普通卡正常交易
+
+//保存设备交易序号
+	
+	temp_int16u = ((INT16U)DevStat.dev_trade_no[0] << 8) | (INT16U)DevStat.dev_trade_no[1]; 			//初始交易序号
+	if ( temp_int16u >= 0xFFFF )
+		temp_int16u = 0;
+	else
+		temp_int16u++;
+	DevStat.dev_trade_no[0] = (INT8U)( temp_int16u / 0x100 );						//+1后的交易序号
+	DevStat.dev_trade_no[1] = (INT8U)( temp_int16u % 0x100 );
+	WriteParam();
+
+	////////////////////////////////////////
+	//验证Sector 3.4.5 密钥改写交易记录
+	////////////////////////////////////////
+//  if(M1CardInit() != ok)
+//  	return ok;
+	
+	m = (CardInfo.credit_rec_pos -12 )/4  +3;//扇区号
+	i = Get_Sector_PermissionB( m, &KeySector[m][0] );
+	if ( i != ok )
+	{
+//  	lcddisperr("fail21");
+		return notok;
+	}
+		
+	memcpy(&CardInfo.blockcreditrec[0], &CardInfo.card_in_time.year, 5);//yymmddhhmi
+	CardInfo.blockcreditrec[5] = ((CardInfo.init_balance / 0x10000 ));//卡片金额
+	CardInfo.blockcreditrec[6] = ( CardInfo.init_balance % 0x10000 / 0x100 );//卡片金额
+	CardInfo.blockcreditrec[7] = ( CardInfo.init_balance % 0x100 );//卡片金额
+
+	CardInfo.blockcreditrec[8] = ((CardInfo.fare / 0x10000 ) | 0x80);//交易金额
+	CardInfo.blockcreditrec[9] = ( CardInfo.fare % 0x10000 / 0x100);//交易金额
+	CardInfo.blockcreditrec[10] = ((CardInfo.fare) % 0x100 );//交易金额
+	
+	memcpy(&CardInfo.blockcreditrec[11],&DevStat.equ_id[1],2);//设备号
+	memcpy(&CardInfo.blockcreditrec[13], &DevStat.cur_driver_number[1],3);//操作员号			 //by liujihua
+
+	i = EA_ucMIFWrite (hMifsHandle, CardInfo.credit_rec_pos, &CardInfo.blockcreditrec[0]);//CardMFCWrite16Bytes(CardInfo.credit_rec_pos, &CardInfo.blockcreditrec[0]);
+	if( i != ok)
+	{
+//  	lcddisperr("fail4");
+		return notok;
+	}
+	return ok;
+}
+
+
+//INT8U CardMFCWrite16Bytes(int d_block, INT8U* data)
+//{
+//    uchar ucResult;
+//    ucResult = EA_ucMIFWrite (hMifsHandle, CardInfo.credit_rec_pos, &CardInfo.blockcreditrec[0]);//CardMFCWrite16Bytes(CardInfo.credit_rec_pos, &CardInfo.blockcreditrec[0]);
+//    if (ucResult != EM_SUCCESS)
+//    {
+////  	lcddisperr("fail22");
+//        return notok;
+//    }
+//    return ok;
+//}
+///*****************************************************************
+// 函数原型：M1_Card_Consume_ProcessA
+// 功能描述：M1消费卡扣款流程
+// 参数描述：
+// 参数名称：	输入/输出？	类型		描述
+//				
+//				
+// 返  回  值：	ok(0)-消费成功		
+//				0xFF-消费失败
+//				//0xFC-不是本系统卡
+//				//0xFD-有卡出错，但没有回该卡
+//				0xF0-重新刷卡
+// 作      者	：许岩
+// 日      期：2004-09-27
+// 修改历史：
+//		日期		修改人		修改描述
+//		2005.2.21		myron			in function
+//*****************************************************************/
+//INT8U M1_Card_Consume_ProcessA(void)
+//{
+//	
+//	INT8U   LOCAL_V_TYPE    i = 0;
+//	INT8U   LOCAL_V_TYPE    j = 0;
+//	INT8U   LOCAL_V_TYPE    m = 0;
+//	INT16U  LOCAL_V_TYPE    temp_int16u;
+//	INT8S   LOCAL_V_TYPE    g = 0;
+//	INT8U   LOCAL_V_TYPE    block_buffer1[16] = {0};
+//	INT8U   LOCAL_V_TYPE    block_buffer2[16] = {0};
+//	INT8U   LOCAL_V_TYPE    block9[16];
+//	INT8U   LOCAL_V_TYPE    block10[16];
+//	float   zero=0;
+//	//float temp_data;
+//	//INT8U 	const  			zero[4] = {0,0,0,0};
+//	INT32U  LOCAL_V_TYPE    temp_balance;
+////     INT8U   LOCAL_V_TYPE    zero_balance_counter ;
+//
+//
+//
+//	////////////////////////////////////////
+//	//验证Sector 6 密钥
+//	////////////////////////////////////////
+////  if(M1CardInit() != ok)
+////  	return notok;
+//	
+//	//i = Get_Sector_PermissionA(6, &KeySector[6][0]);
+//	i = Get_Sector_PermissionA(6, &KeySector[6][0]);
+//	if ( i != ok )
+//		return notok;
+//
+//	i = EA_ucMIFRead(hMifsHandle, 24, block_buffer1);
+//	if ( i != ok )
+//		return notok;
+//
+//	i = EA_ucMIFRead(hMifsHandle, 25, block_buffer2);
+//	if ( i != ok )
+//		return notok;
+//
+//	i = Sec6_Block_Is_Legal(block_buffer1);
+//	j = Sec6_Block_Is_Legal(block_buffer2);
+//	if ( (i == ok) && (j == ok) )
+//	{
+//		//两区都合法，看两区数据是否一致
+//		g = memcmp(block_buffer1, block_buffer2, 16);
+//		if ( g == ok )
+//		{
+//			//两区一致，什么也不做
+//			;
+//		}
+//		else
+//		{
+//			//两区不一致，以24区为主
+//			m = EA_ucMIFWrite(hMifsHandle, 25, block_buffer1);
+//			if ( m != ok )
+//				return notok;
+//		}
+//
+//	}
+//	else if ( i == ok )
+//	{
+//		//24区合法，24->25
+//		m = EA_ucMIFWrite(hMifsHandle, 25, block_buffer1);
+//		if ( m != ok )
+//			return notok;
+//	}
+//	else if ( j == ok )
+//	{
+//		//25区合法，25->24
+//		m = EA_ucMIFWrite(hMifsHandle, 24, block_buffer2);
+//		if ( m != ok )
+//			return notok;
+//		memcpy(block_buffer1, block_buffer2, 16);//好的数据传给block_buffer1，下边处理数据用block_buffer1
+//	}
+//	else
+//	{
+//		//两区都不合法，退出
+//		return notok;
+//	}
+//
+//	////////////////////////////////////////
+//	//判断此卡是否已经置黑名单标志
+//	////////////////////////////////////////
+//	if ( block_buffer1[7] == 0x04 )
+//	{
+//		printf_debug((char*)"非法卡");
+//		return notok;
+//	}
+//
+//
+//	CardInfo.credit_rec_pos = block_buffer1[8];
+//		
+//	if(CardInfo.credit_rec_pos == 0x00 ||CardInfo.credit_rec_pos == 0xFF)
+//		CardInfo.credit_rec_pos = 0x0C;
+//	else
+//		CardInfo.credit_rec_pos ++;
+//
+//	if(CardInfo.credit_rec_pos==0x0f ||CardInfo.credit_rec_pos==0x13 )
+//		CardInfo.credit_rec_pos ++;
+//	if(CardInfo.credit_rec_pos>=0x17)
+//		CardInfo.credit_rec_pos=0x0C;
+//
+//	////////////////////////////////////////////////////////
+//	//出错判断
+//	////////////////////////////////////////////////////////
+//	if ( ErrCardInfo.error_occured == TRUE )							  //保证了交易序号可断不可重，交易序号为数据库中主键之一
+//	{
+//		//出错卡重入
+//		memcpy(&ErrCardInfo.block24_buf_to_restore[12], "\x18\xE7\x18\xE7", 4);		//强制置为0x18E7
+//		i = EA_ucMIFWrite(hMifsHandle, 24, &ErrCardInfo.block24_buf_to_restore[0]);
+//		if ( i != ok )
+//			return notok;
+//
+//		i = EA_ucMIFWrite(hMifsHandle, 25, &ErrCardInfo.block24_buf_to_restore[0]);
+//		if ( i != ok )
+//			return notok;
+//	}
+//	else
+//	{		//第一次入卡处理 
+//		////////////////////////////////////////
+//		//卡内交易计数器处理
+//		////////////////////////////////////////
+//		CardInfo.init_purchase_serial_num[0] = block_buffer1[0];				//初始交易序号
+//		CardInfo.init_purchase_serial_num[1] = block_buffer1[1];
+//		temp_int16u = ((INT16U)block_buffer1[0] << 8) | (INT16U)block_buffer1[1];				//初始交易序号
+//		if ( temp_int16u >= 0xFFFF )
+//			temp_int16u = 0;
+//		else
+//			temp_int16u++;
+////  	EA_vDisplay(1, "%02x", block_buffer1[0]);
+////  	EA_vDisplay(2, "%02x", block_buffer1[1]);
+////  	EA_vDisplay(2, "%02d", temp_int16u);
+////  	EA_uiInkey(0);
+//
+//		CardInfo.purchase_serial_num[0] = (INT8U)(temp_int16u / 0x100 );						//+1后的交易序号
+//		CardInfo.purchase_serial_num[1] = (INT8U)(temp_int16u % 0x100 );
+//
+//		memcpy(&ErrCardInfo.block24_buf_to_restore[0], block_buffer1, 16);				//凑24区应该写入的数据
+//		memcpy(&ErrCardInfo.block24_buf_to_restore[0], &CardInfo.purchase_serial_num[0], 2);
+//		memcpy(&ErrCardInfo.block24_buf_to_restore[12], "\x18\xE7\x18\xE7", 4);		//强制置为0x18E7
+//		i = EA_ucMIFWrite(hMifsHandle, 24, &ErrCardInfo.block24_buf_to_restore[0]);
+//		if ( i != ok )
+//			return notok;
+//
+//		i = EA_ucMIFWrite(hMifsHandle, 25, &ErrCardInfo.block24_buf_to_restore[0]);
+//		if ( i != ok )
+//			return notok;
+//
+//	}
+//
+//	CardInfo.psam_purchase_serial_num = 0;										//PSAM卡交易序号清零
+//
+//	////////////////////////////////////////
+//	//验证Sector 2 密钥
+//	////////////////////////////////////////
+//	if(M1CardInit() !=ok)
+//		return notok;
+//	
+//	//i = Get_Sector_PermissionA(2, &KeySector[2][0]);
+//	i = Get_Sector_PermissionA(2, &KeySector[2][0]);
+//	if ( i != ok )
+//		return notok;
+//
+//	i =EA_ucMIFRead(hMifsHandle, 9, block9);
+//	if ( i != ok )
+//		return notok;
+//
+//	i = EA_ucMIFRead(hMifsHandle, 10, block10);
+//	if ( i != ok )
+//		return notok;
+//
+//	i = Purse_Block_Is_Right(block9);
+//	j = Purse_Block_Is_Right(block10);
+//	if ( (i == ok) && (j == ok) )
+//	{	//两区都合法，看两区数据是否一致
+//		g = memcmp(block9, block10, 16);
+//		if ( g == ok )
+//		{
+//			;			//两区一致，什么也不做
+//		}
+//		else
+//		{
+//			//两区不一致，以9块为主
+//			m = CardMFCValueWithTransfer(PICC_DECREMENT, 9, 10,zero);	  //两区不一致，以9块为主
+//			if ( m != ok )
+//				return notok;
+//		}
+//	}
+//	else if ( i == ok )
+//	{
+////         m = Write(10, block9);              //9区合法，9->10
+//		m = CardMFCValueWithTransfer(PICC_DECREMENT, 9, 10, zero);	   //9区合法，9->10
+//		if ( m != ok )
+//			return notok;
+//	}
+//	else if ( j == ok )
+//	{
+////         m = Write(9, block10);          //10区合法，10->9
+//		m = CardMFCValueWithTransfer(PICC_DECREMENT, 10, 9, zero);	  //10区合法，10->9
+//		if ( m != ok )
+//			return notok;
+//		memcpy(block9, block10, 16);		//好的数据传给block9下边处理数据用block9
+//	}
+//	else
+//	{
+//		return notok;		//两区都不合法，退出
+//	}
+//
+//
+//
+//	////////////////////////////////////////
+//	//出错卡扣款处理
+//	////////////////////////////////////////
+//	if ( ErrCardInfo.error_occured == TRUE )
+//	{	//出错卡回卡处理，分两种情况，一种是已经扣过款了，令一种是还没扣过款
+//		temp_balance = BlockToCash(block9);
+//		if ( temp_balance == ErrCardInfo.init_balance )
+//		{	//扣款没成功
+//			//往下接着走第一次扣款处理
+//		}
+//		else
+//		{	//扣款成功(包括其他情况，也算扣款成功)
+//			CardInfo.balance = temp_balance;//储存交易后余额
+//
+//			//if ( (DevStat.oldman_free == TRUE && CardInfo.card_type == CARDT_OLDMAN)
+//			//	 || (DevStat.employee_a_free == TRUE && CardInfo.card_type == CARDT_FREE)
+//			//	 || (DevStat.driver_free == TRUE && CardInfo.card_type == CARDT_DRIVER) )
+//			//{
+//			//	CardInfo.card_purchase_type = TT_FREE;	//免费卡交易
+//			//}
+//			
+//			//else
+//			//{
+//				CardInfo.card_purchase_type = TT_NORMAL_CONSUME_MONEY;//普通卡正常交易
+//			//}
+//
+//			return ok;
+//		}
+//	}
+//
+//	////////////////////////////////////////
+//	//第一次入卡扣款处理
+//	////////////////////////////////////////
+//	if ( ErrCardInfo.error_occured != TRUE )			//只有在第一次入卡时，才保存初始余额，以后雷打不动
+//	{
+//		CardInfo.init_balance = BlockToCash(block9);
+//	}
+//
+//
+//	if ( CardInfo.init_balance < CardInfo.fare )
+//	{
+//		//余额不足处理
+//		printf_debug((char *)"余额不足请充值");
+//		memset(&CardInfo, 0x00, sizeof(CardInfo));		//清卡片交易信息		
+//		memset(&ErrCardInfo, 0x00, sizeof(ErrCardInfo));	//清出错卡信息
+//		DevStat.purchase_again_req = FALSE;//清重新刷卡语音标志
+//		DevStat.voice_purchase_again_freq=0;
+//		return notok;
+//	}
+//
+//	if( ErrCardInfo.error_occured != TRUE)
+//		StoreGrayRecord();
+//
+//// 	SleepMs(500);
+////	i = CardMFCValueWithTransfer(PICC_DECREMENT, 9, 9,CashToBlock(CardInfo.fare));
+//	i = CardMFCValueWithTransfer(PICC_DECREMENT, 9, 9,CardInfo.fare);
+//
+//	if ( i != ok )
+//	{	//扣款出错处理，记录出错卡卡号和原余额
+//		memcpy(&ErrCardInfo.m1_card_number[0], &CardInfo._CARD_NUMBER.detail_card_number.serial_number[0], 4);	//保存出错M1卡卡号
+//		memcpy(&ErrCardInfo.csn[0], &CardInfo.csn[0], 4);				//保存出错M1卡硬件卡号
+//		ErrCardInfo.init_balance = CardInfo.init_balance;					//保存出错M1卡原余额
+//		ErrCardInfo.error_occured = TRUE;
+//		DevStat.purchase_again_req = TRUE;		//申请重新刷卡语音
+//		DevStat.voice_purchase_again_freq=100;
+//// 		return notok;
+//		return 0xF0;
+//	}
+//	i = CardMFCValueWithTransfer(PICC_DECREMENT, 9, 10, 0);
+//	if ( i != ok )
+//	{	//扣款出错处理，记录出错卡卡号和原余额
+//		memcpy(&ErrCardInfo.m1_card_number[0], &CardInfo._CARD_NUMBER.detail_card_number.serial_number[0], 4);	//保存出错M1卡卡号
+//		memcpy(&ErrCardInfo.csn[0], &CardInfo.csn[0], 4);				//保存出错M1卡硬件卡号
+//		ErrCardInfo.init_balance = CardInfo.init_balance;					//保存出错M1卡原余额
+//		ErrCardInfo.error_occured = TRUE;
+//		DevStat.purchase_again_req = TRUE;		//申请重新刷卡语音
+//		DevStat.voice_purchase_again_freq=100;
+//// 		return notok;
+//		return 0xF0;
+//	}
+//
+//	CardInfo.balance = CardInfo.init_balance - CardInfo.fare;//储存交易后余额
+////	CardInfo.card_purchase_type = TT_NORMAL_CONSUME_MONEY;	//冲帐交易类型
+//	CardInfo.card_purchase_type = TT_NORMAL_CONSUME_MONEY;//普通卡正常交易
+//
+////保存设备交易序号
+//	
+//	temp_int16u = ((INT16U)DevStat.dev_trade_no[0] << 8) | (INT16U)DevStat.dev_trade_no[1]; 			//初始交易序号
+//	if ( temp_int16u >= 0xFFFF )
+//		temp_int16u = 0;
+//	else
+//		temp_int16u++;
+//	DevStat.dev_trade_no[0] = (INT8U)(temp_int16u / 0x100);						//+1后的交易序号
+//	DevStat.dev_trade_no[1] = (INT8U)(temp_int16u % 0x100);
+//	WriteParam();
+//
+//	return ok;
+//}
+/*****************************************************************
+ 函数原型：Lock_M1_Card_Process
+ 功能描述：M1卡黑名单在中，锁卡处理流程
+ 参数描述：
+ 参数名称：	输入/输出？	类型		描述
+				
+				
+ 返  回  值：	ok(0)-消费成功		
+				0xFF-消费失败
+ 作      者	：许岩
+ 日      期：2003-12-19
+ 修改历史：
+		日期		修改人		修改描述
+		------		---------	-------------
+*****************************************************************/
+INT8U Lock_M1_Card_Process(void)
+{
+	INT8U LOCAL_V_TYPE  i = 0;
+	INT8U LOCAL_V_TYPE  j = 0;
+	INT8U LOCAL_V_TYPE  m = 0;
+	INT8S LOCAL_V_TYPE g = 0;
+	INT8U  block_buffer1[16] = {0};
+	INT8U  block_buffer2[16] = {0};
+
+
+	////////////////////////////////////////
+	//验证Sector 6 密钥
+	////////////////////////////////////////
+	if(M1CardInit() != ok)
+	{
+		EA_ucMIFHalt(hMifsHandle);	//挂卡
+		return notok;
+	}
+	
+	i = Get_Sector_PermissionB(6, &KeySector[6][0]);
+	if ( i != ok )
+		return notok;
+
+	i = EA_ucMIFRead(hMifsHandle, 24, block_buffer1);
+	if ( i != ok )
+		return notok;
+
+	i = EA_ucMIFRead(hMifsHandle, 25, block_buffer2);
+	if ( i != ok )
+		return notok;
+
+	i = Sec6_Block_Is_Legal(block_buffer1);
+	j = Sec6_Block_Is_Legal(block_buffer2);
+	if ( (i == ok) && (j == ok) )
+	{
+		//两区都合法，看两区数据是否一致
+		g = memcmp(block_buffer1, block_buffer2, 16);
+		if ( g == ok )
+		{
+			;//两区一致，什么也不做
+		}
+		else
+		{
+			//两区不一致，以24区为主
+			m = CardMFCWrite16Bytes(25,block_buffer1);
+			if ( m != ok )
+				return notok;
+		}
+
+	}
+	else if ( i == ok )
+	{
+		//24区合法，24->25
+		m = CardMFCWrite16Bytes(25,block_buffer1);
+		if ( m != ok )
+			return notok;
+	}
+	else if ( j == ok )
+	{
+		//25区合法，25->24
+		m = CardMFCWrite16Bytes(24,block_buffer2);
+		if ( m != ok )
+			return notok;
+		memcpy(block_buffer1, block_buffer2, 16);		//好的数据传给block_buffer1，下边处理数据用block_buffer1
+	}
+	else
+	{
+		return notok;		//两区都不合法，退出
+	}
+
+	////////////////////////////////////////
+	//判断此卡是否已经置黑名单标志
+	////////////////////////////////////////
+	if ( block_buffer1[7] == 0x04 )
+	{
+		printf_debug((char *)"非法卡");
+		Beep(500);	
+		return notok;
+	}
+
+	////////////////////////////////////////
+	//将黑名单标志位写为0x04
+	////////////////////////////////////////
+	block_buffer1[7] = 0x04;
+	i = CardMFCWrite16Bytes(24, block_buffer1);
+	if ( i != ok )
+		return notok;
+
+	i = CardMFCWrite16Bytes(25, block_buffer1);
+
+	
+	CardInfo.psam_purchase_serial_num = 0;//PSAM卡交易序号清零
+	CardInfo.balance = 0;//交易后余额清零
+	CardInfo.fare = 0;//交易金额清零
+	memset(&CardInfo.purchase_serial_num[0], 0x00, 2);//交易计数器清零  
+	memset(&CardInfo.tac[0], 0x00, 4);		//tac码清零
+	CardInfo.card_purchase_type = TT_BLACKNAME_CONSUME_TYPE;	//交易类型为黑名单交易
+	(void)StoreRecord(&CardInfo);			//储存售卡记录
+	////////////////////////////////////////
+	//M1卡挂卡
+	////////////////////////////////////////
+	j = EA_ucMIFHalt(hMifsHandle);	//挂卡
+
+	return ok;
+}
+
+/******************************************************************************
+ 函数名称：ICCardProcess
+ 功能描述：卡交易流程
+ 参数描述：
+ 参数名称：	输入/输出？	类型		描述
+ 
+ 返  回  值：ok(0)-成功
+				 notok(0xFF)-失败
+				 0xFE-没找到卡
+				 0xF0-重新刷卡
+				   
+ 作      者	：许岩
+ 日      期：2004-09-02
+ 修改历史：
+		日期		修改人		修改描述
+		2005.2.18		myron	                   in function 
+******************************************************************************/
+INT8U ICCardProcess(void)
+{
+//     INT8U LOCAL_V_TYPE  j =0;
+	INT8U LOCAL_V_TYPE  i = 0;  
+	unsigned short  ICType;
+	ulong ICSnr;
+	uint  puiSize;
+
+	i = EA_ucMIFRequest(hMifsHandle, EM_mifs_IDLE, &ICType);
+	if ( i != EM_SUCCESS )
+	{
+		return 0xFE;
+	}
+	i = EA_ucMIFAntiColl(hMifsHandle,&ICSnr);
+	if ( i != EM_SUCCESS )
+	{
+		return notok;
+	}
+	EA_ucMIFSelect(hMifsHandle,ICSnr, &puiSize);
+	if ( i != EM_SUCCESS )
+	{
+		return notok;
+	}
+
+	i = M1CardProcess();
+	if ( i != ok )
+		return i;
+
+	memset(&CardInfo, 0x00, sizeof(CardInfo));		//清卡片交易信息
+	memset(&ErrCardInfo, 0x00, sizeof(ErrCardInfo));	//清出错卡信息
+	DevStat.purchase_again_req = FALSE;					//清重新刷卡语音标志
+	DevStat.voice_purchase_again_freq=FALSE;
+	return ok;
+}
+
+/*****************************************************************
+ 函数原型：M1_Card_Credit_Process
+ 功能描述：M1消费卡充值流程
+ 参数描述：
+ 参数名称：	输入/输出？	类型		描述
+				
+				
+ 返  回  值：	ok(0)-充值成功		
+				0xFF-充值失败
+				//0xFC-不是本系统卡
+				//0xFD-有卡出错，但没有回该卡
+				0xF0-重新刷卡
+ 作      者	：许岩
+ 日      期：2004-09-27
+ 修改历史：
+		日期		修改人		修改描述
+		2005.2.21		myron			in function
+*****************************************************************/
+INT8U M1_Card_Credit_Process(void)
+{
+	INT8U   LOCAL_V_TYPE    i = 0;
+	INT8U   LOCAL_V_TYPE    j = 0;
+	INT8U   LOCAL_V_TYPE    m = 0;
+	INT16U  LOCAL_V_TYPE    temp_int16u;
+	INT8S   LOCAL_V_TYPE    g = 0;
+	INT8U   LOCAL_V_TYPE    block_buffer1[16] = {0};
+	INT8U   LOCAL_V_TYPE    block_buffer2[16] = {0};
+	INT8U   LOCAL_V_TYPE    block9[16];
+	INT8U   LOCAL_V_TYPE    block10[16];
+	ulong   zero = 0;
+	INT32U  LOCAL_V_TYPE    temp_balance;
+	int		ret = 0;
+
+//	uchar   ucResult;
+	
+	////////////////////////////////////////
+	//验证Sector 6 密钥
+	////////////////////////////////////////
+
+
+//  if( M1CardInit() != ok )
+//  {
+//  	EA_ucMIFHalt(hMifsHandle);	//挂卡
+//  	return notok;
+//  }
+	
+	i = Get_Sector_PermissionB( 6, &KeySector[6][0] );
+	if ( i != ok )
+	{
+		lcddisperr("no 1!");
+		return notok;	
+	}
+
+	i = EA_ucMIFRead( hMifsHandle, 24, block_buffer1 );
+	if ( i != ok )
+	{
+		lcddisperr("no 2!");
+		return notok;
+	}
+	i = EA_ucMIFRead(hMifsHandle, 25, block_buffer2);
+	if ( i != ok )
+	{
+		lcddisperr("no 3!");
+		return notok;
+	}
+
+	i = Sec6_Block_Is_Legal(block_buffer1);
+	j = Sec6_Block_Is_Legal(block_buffer2);
+
+	if ( ( i == ok ) && ( j == ok ) )
+	{
+		//两区都合法，看两区数据是否一致
+		g = memcmp(block_buffer1, block_buffer2, 16);
+		if ( g == ok )
+		{
+			//两区一致，什么也不做
+			;
+		}
+		else
+		{
+			//两区不一致，以24区为主
+//  		m = CardMFCWrite16Bytes(25,block_buffer1);
+			m = EA_ucMIFWrite( hMifsHandle, 25, block_buffer1 );
+			if ( m != ok )
+				return notok;
+		}
+
+	}
+	else if ( i == ok )
+	{
+		//24区合法，24->25
+		m = EA_ucMIFWrite( hMifsHandle, 25, block_buffer1 );
+		if ( m != ok )
+			return notok;
+	}
+	else if ( j == ok )
+	{
+		//25区合法，25->24
+		m = EA_ucMIFWrite( hMifsHandle, 24, block_buffer2 );
+		if ( m != ok )
+			return notok;
+		memcpy(block_buffer1, block_buffer2, 16);  //好的数据传给block_buffer1，下边处理数据用block_buffer1
+	}
+	else
+	{
+		//两区都不合法，退出
+		EA_ucMIFHalt(hMifsHandle);	//挂卡
+		return notok;
+	}
+
+	////////////////////////////////////////
+	//判断此卡是否已经置黑名单标志
+	////////////////////////////////////////
+	if ( block_buffer1[7] == 0x04 )
+	{
+		lcddisperr("非法卡");
+//  	EA_ucMIFHalt();	//挂卡
+		(void)EA_ucMIFHalt(hMifsHandle);
+		return notok;
+	}
+
+	CardInfo.credit_rec_pos = block_buffer1[8];
+		
+	if(CardInfo.credit_rec_pos == 0x00 ||CardInfo.credit_rec_pos == 0xFF)
+		CardInfo.credit_rec_pos = 0x0C;
+	else
+		CardInfo.credit_rec_pos ++;
+	
+	if(CardInfo.credit_rec_pos == 0x0f ||CardInfo.credit_rec_pos == 0x13 )
+		CardInfo.credit_rec_pos ++;
+	if(CardInfo.credit_rec_pos >= 0x17)
+		CardInfo.credit_rec_pos = 0x0C;
+
+	
+	CardInfo.card_purchase_type = TT_CREDIT_MONEY;	//充值交易类型
+	CardInfo.balance = CardInfo.init_balance + CardInfo.fare;//储存交易后余额
+		
+	////////////////////////////////////////////////////////
+	//出错判断
+	////////////////////////////////////////////////////////
+	if ( ErrCardInfo.error_occured == TRUE )							  //保证了交易序号可断不可重，交易序号为数据库中主键之一
+	{
+		//出错卡重入
+		memcpy(&ErrCardInfo.block24_buf_to_restore[12], "\x18\xE7\x18\xE7", 4);		//强制置为0x18E7
+		i = EA_ucMIFWrite(hMifsHandle, 24, &ErrCardInfo.block24_buf_to_restore[0]);
+		if ( i != ok )
+			return notok;
+
+		i = EA_ucMIFWrite(hMifsHandle, 25, &ErrCardInfo.block24_buf_to_restore[0]);
+		if ( i != ok )
+			return notok;
+	}
+	else
+	{		
+		//第一次入卡处理 				
+		////////////////////////////////////////
+		//卡内交易计数器处理
+		////////////////////////////////////////
+		CardInfo.init_purchase_serial_num[0] = block_buffer1[0];				//初始交易序号
+		CardInfo.init_purchase_serial_num[1] = block_buffer1[1];
+		temp_int16u = ((INT16U)block_buffer1[0] << 8) | (INT16U)block_buffer1[1];				//初始交易序号
+		if ( temp_int16u >= 0xFFFF )
+			temp_int16u = 0;
+		else
+			temp_int16u ++;
+		CardInfo.purchase_serial_num[0] = (INT8U)(temp_int16u / 0x100);						//+1后的交易序号
+		CardInfo.purchase_serial_num[1] = (INT8U)(temp_int16u % 0x100);
+
+		memcpy(&ErrCardInfo.block24_buf_to_restore[0], block_buffer1, 16);				//凑24区应该写入的数据
+		memcpy(&ErrCardInfo.block24_buf_to_restore[0], &CardInfo.purchase_serial_num[0], 2);
+		ErrCardInfo.block24_buf_to_restore[8] = CardInfo.credit_rec_pos;
+		memcpy(&ErrCardInfo.block24_buf_to_restore[12], "\x18\xE7\x18\xE7", 4);		//强制置为0x18E7
+		i = EA_ucMIFWrite(hMifsHandle, 24, &ErrCardInfo.block24_buf_to_restore[0]);
+		if ( i != ok )
+			return notok;
+
+		i = EA_ucMIFWrite(hMifsHandle, 25, &ErrCardInfo.block24_buf_to_restore[0]);
+		if ( i != ok )
+			return notok;
+	}
+
+//保存设备交易序号
+	
+	temp_int16u = ((INT16U)DevStat.dev_trade_no[0] << 8) | (INT16U)DevStat.dev_trade_no[1];				//初始交易序号
+	if ( temp_int16u >= 0xFFFF )
+		temp_int16u = 0;
+	else
+		temp_int16u++;
+	DevStat.dev_trade_no[0] = (INT8U)(temp_int16u / 0x100 );						//+1后的交易序号
+	DevStat.dev_trade_no[1] = (INT8U)(temp_int16u % 0x100 );
+	WriteParam();
+	
+
+	memcpy(&CardInfo.dev_trade_no[0],&DevStat.dev_trade_no[0], 2);				//PSAM卡交易序号清零
+
+	CardInfo.psam_purchase_serial_num = 0;		
+
+
+	////////////////////////////////////////
+	//验证Sector 2 密钥
+	////////////////////////////////////////
+
+//  if( M1CardInit() != ok )
+//  {
+//  	return notok;
+//  }
+	
+	i = Get_Sector_PermissionB(2, &KeySector[2][0]);
+	if ( i != ok )
+	{
+		lcddisperr("no 3");
+		return notok;
+	}
+
+	i = EA_ucMIFRead(hMifsHandle, 9, block9);
+	if ( i != ok )
+		return notok;
+	
+
+	i = EA_ucMIFRead(hMifsHandle, 10, block10);
+	if ( i != ok )
+		return notok;
+
+	i = Purse_Block_Is_Right(block9);
+	j = Purse_Block_Is_Right(block10);
+	if ( (i == ok) && (j == ok) )
+	{	//两区都合法，看两区数据是否一致
+		g = memcmp( block9, block10, 16 );
+		if ( g == ok )
+		{
+			;			//两区一致，什么也不做
+		}
+		else
+		{
+			m = CardMFCValueWithTransfer(1, 9, 10, zero);
+			if ( m != ok )
+				return notok;
+		}
+	}
+	else if ( i == ok )
+	{
+		m = CardMFCValueWithTransfer(1, 9, 10, zero);	   //9区合法，9->10
+		if ( m != ok )
+			return notok;
+	}
+	else if ( j == ok )
+	{
+		m = CardMFCValueWithTransfer(1, 10, 9, zero);	  //10区合法，10->9
+		if ( m != ok )
+			return notok;
+
+		memcpy(block9, block10, 16);		//好的数据传给block9下边处理数据用block9
+	}
+	else
+	{
+		EA_ucMIFHalt(hMifsHandle);	//挂卡
+		return notok;		//两区都不合法，退出
+	}
+
+	////////////////////////////////////////
+	//出错卡扣款处理
+	////////////////////////////////////////
+	if ( ErrCardInfo.error_occured == TRUE )
+	{	//出错卡回卡处理，分两种情况，一种是已经扣过款了，令一种是还没扣过款
+		temp_balance = BlockToCash(block9);
+		if ( temp_balance == ErrCardInfo.init_balance )
+		{	//扣款没成功
+			//往下接着走第一次扣款处理
+			//判断操作员大卡金额是否发生变化
+		}
+		else
+		{	//扣款成功(包括其他情况，也算扣款成功)
+			CardInfo.balance = temp_balance;//储存交易后余额
+			CardInfo.card_purchase_type = TT_CREDIT_MONEY;	//免费卡交易
+
+//			if ( (DevStat.oldman_free == TRUE && CardInfo.card_type == CARDT_OLDMAN)
+//				 || (DevStat.employee_a_free == TRUE && CardInfo.card_type == CARDT_FREE)
+//				 || (DevStat.driver_free == TRUE && CardInfo.card_type == CARDT_DRIVER) )
+//			{
+//				CardInfo.card_purchase_type = TT_FREE;	//免费卡交易
+//			}
+//			else
+//			{
+//				CardInfo.card_purchase_type = TT_NORMAL_CONSUME_MONEY;//普通卡正常交易
+//			}
+
+			return ok;
+		}
+	}
+
+	////////////////////////////////////////
+	//第一次入卡扣款处理
+	////////////////////////////////////////
+	if ( ErrCardInfo.error_occured == FALSE )			//只有在第一次入卡时，才保存初始余额，以后雷打不动
+	{
+		CardInfo.init_balance = BlockToCash(block9);
+	}
+
+	if ( ( CardInfo.init_balance + CardInfo.fare ) > DevStat.max_card_limit)
+	{
+
+		//余额不足处理
+		lcddisperr("余额超过上限");
+		memset(&CardInfo, 0x00, sizeof(CardInfo));		//清卡片交易信息		
+		memset(&ErrCardInfo, 0x00, sizeof(ErrCardInfo));	//清出错卡信息
+		DevStat.purchase_again_req = FALSE;//清重新刷卡语音标志
+		DevStat.voice_purchase_again_freq = 0;
+		EA_ucMIFHalt(hMifsHandle);	//挂卡
+		return notok;
+	}
+	
+	if ( ErrCardInfo.error_occured == FALSE )			//只有在第一次入卡时，才保存初始余额，以后雷打不动
+	{
+		StoreGrayRecord();
+	}
+	//扣除操作员卡内金额
+//  Cpucard_Init();
+	ret = OperTradeProcess(0, CardInfo.fare);
+	if(ret != ok )
+	{
+		Cpucard_power_off();
+		ErrCardInfo.error_occured = TRUE;
+		lcddisperr("大卡错误不能交易");
+//  	MC530Off();
+//  	InitMC530(TYPE_A_ISO14443);
+		EA_ucMIFHalt(hMifsHandle);	//挂卡
+		return 0xF0;
+	}
+//  Cpucard_power_off();
+//	}
+
+// 	SleepMs(500);
+//	i = EA_ucMIFTransfer(PICC_INCREMENT, 9, 9,CardInfo.fare);
+//  i = EA_ucMIFIncrement(hMifsHandle, 9, CardInfo.fare);
+//  i = EA_ucMIFTransfer(hMifsHandle, 9);
+	i = CardMFCValueWithTransfer( 1, 9, 9, CardInfo.fare );
+	if ( i != ok )
+	{	//扣款出错处理，记录出错卡卡号和原余额
+		memcpy(&ErrCardInfo.m1_card_number[0], &CardInfo._CARD_NUMBER.detail_card_number.serial_number[0], 4);	//保存出错M1卡卡号
+		memcpy(&ErrCardInfo.csn[0], &CardInfo.csn[0], 4);				//保存出错M1卡硬件卡号
+		ErrCardInfo.init_balance = CardInfo.init_balance;					//保存出错M1卡原余额
+		ErrCardInfo.error_occured = TRUE;
+		DevStat.purchase_again_req = TRUE;		//申请重新刷卡语音
+		DevStat.voice_purchase_again_freq = 100;
+// 		return notok;
+//		printf_debug("222222222222");
+		EA_ucMIFHalt(hMifsHandle);	//挂卡
+		return 0xF0;
+	}
+//  i = CardMFCValueWithTransfer(PICC_INCREMENT, 9, 10, 0);
+//  i = EA_ucMIFIncrement(hMifsHandle, 9, 0);
+//  i = EA_ucMIFTransfer(hMifsHandle, 10);
+	i = CardMFCValueWithTransfer( 1, 9, 10, 0 );
+	if ( i != ok )
+	{	//扣款出错处理，记录出错卡卡号和原余额
+		memcpy(&ErrCardInfo.m1_card_number[0], &CardInfo._CARD_NUMBER.detail_card_number.serial_number[0], 4);	//保存出错M1卡卡号
+		memcpy(&ErrCardInfo.csn[0], &CardInfo.csn[0], 4);				//保存出错M1卡硬件卡号
+		ErrCardInfo.init_balance = CardInfo.init_balance;					//保存出错M1卡原余额
+		ErrCardInfo.error_occured = TRUE;
+		DevStat.purchase_again_req = TRUE;		//申请重新刷卡语音
+		DevStat.voice_purchase_again_freq = 100;
+// 		return notok;
+//		printf_debug("111111");
+		EA_ucMIFHalt(hMifsHandle);	//挂卡
+		return 0xF0;
+	}
+
+	CardInfo.card_purchase_type = TT_CREDIT_MONEY;	//充值交易类型
+	CardInfo.balance = CardInfo.init_balance + CardInfo.fare;//储存交易后余额
+
+//	printf_debug("3333333");	
+	
+	////////////////////////////////////////
+	//验证Sector 3.4.5 密钥改写交易记录
+	////////////////////////////////////////
+//  if(M1CardInit() != ok)
+//  	return ok;
+	
+	m = (CardInfo.credit_rec_pos -12 )/4  + 3;//扇区号
+	i = Get_Sector_PermissionB(m, &KeySector[m][0]);
+	if ( i != ok )
+		return ok;
+	memcpy(&CardInfo.blockcreditrec[0], &CardInfo.card_in_time.year, 5);//yymmddhhmi
+	CardInfo.blockcreditrec[5] = (CardInfo.init_balance / 0x10000);//卡片金额
+	CardInfo.blockcreditrec[6] = (CardInfo.init_balance % 0x10000 / 0x100);//卡片金额
+	CardInfo.blockcreditrec[7] = (CardInfo.init_balance % 0x100);//卡片金额
+
+	CardInfo.blockcreditrec[8] = ( CardInfo.fare / 0x10000 );//交易金额
+	CardInfo.blockcreditrec[9] = ( CardInfo.fare % 0x10000 / 0x100);//交易金额
+	CardInfo.blockcreditrec[10] = ( CardInfo.fare % 0x100);//交易金额
+	
+	memcpy(&CardInfo.blockcreditrec[11],&DevStat.equ_id[1],2);//设备号
+	memcpy(&CardInfo.blockcreditrec[13], &DevStat.cur_driver_number[1],3);//操作员号		//by liujihua
+
+	i = EA_ucMIFWrite(hMifsHandle, CardInfo.credit_rec_pos, &CardInfo.blockcreditrec[0]);
+	//充值后余额
+	CardInfo.balance = CardInfo.init_balance + CardInfo.fare;//储存交易后余额
+
+//	if ( (DevStat.oldman_free == TRUE && CardInfo.card_type == CARDT_OLDMAN)
+//		 || (DevStat.employee_a_free == TRUE && CardInfo.card_type == CARDT_FREE)
+//		 || (DevStat.driver_free == TRUE && CardInfo.card_type == CARDT_DRIVER) )
+//	{
+//		CardInfo.card_purchase_type = TT_FREE;	//免费卡交易
+//	}
+//	else
+//	{
+//		CardInfo.card_purchase_type = TT_NORMAL_CONSUME_MONEY;//普通卡正常交易
+//	}
+	lcddisperr("充值成功!");
+	return ok;
+}
+
+/******************************************************************************
+ 函数名称：M1CardInit
+ 功能描述：卡片初始化,完成找卡工作
+ 参数描述：
+ 参数名称：输入/输出？	类型		描述
+ 
+ 返  回  值：    ok(0)-成功
+				 notok(0xFF)-失败
+				 0xFE-没找到卡
+				 0xF0-重新刷卡
+				   
+ 作      者	：于福勇/刘及华
+ 日      期：2012-12-10
+ 修改历史：
+		日期		修改人		修改描述
+******************************************************************************/
+INT8U M1CardInit(void)
+{
+	uchar	ucResult;
+	ushort	usICType;
+	ulong	ulSnr;
+	INT8U   kind_of_card;
+	uint	uiSize;
+
+	ucResult = EA_ucMIFRequest(hMifsHandle, EM_mifs_IDLE, &usICType);
+	if (ucResult != EM_SUCCESS)
+	{
+		lcddisperr("M1卡获取卡号失败");
+		return notok;
+	}
+
+	ucResult = EA_ucMIFAntiColl(hMifsHandle, &ulSnr);
+	if (ucResult != EM_SUCCESS)
+	{
+		lcddisperr("M1卡获取卡号失败");
+		return notok;
+	}
+
+	ucResult = EA_ucMIFSelect(hMifsHandle, ulSnr, &uiSize);
+	if (ucResult != EM_SUCCESS)
+	{
+		lcddisperr("M1卡获取卡类型失败");
+		return notok;
+	}
+
+	CardInfo.csn[3] = (INT8U)(ulSnr / 0x1000000);
+	CardInfo.csn[2] = (INT8U)((ulSnr % 0x1000000) / 0x10000);
+	CardInfo.csn[1] = (INT8U)((ulSnr % 0x10000) / 0x100);
+	CardInfo.csn[0] = (INT8U)(ulSnr % 0x100);
+
+	kind_of_card = usICType;
+
+	if ( kind_of_card != M1_CARD )
+	{
+		lcddisperr("不是M1卡");
+		return notok;
+	}
+	//取得硬件卡号
+	return ok;
+}
+
+
