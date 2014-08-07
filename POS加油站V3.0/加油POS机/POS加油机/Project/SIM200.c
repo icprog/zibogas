@@ -69,11 +69,11 @@ INT8U gprs_send_record(void)
 
 	if(DevStat.record_number > 0)
 	{
-		i = 0;
-		if( i != DevStat.send_total_num )//断点续传
-		{
-			i = DevStat.send_total_num;
-		}
+//  	i = 0;
+//  	if( i != DevStat.send_total_num )//断点续传
+//  	{
+//  		i = DevStat.send_total_num;
+//  	}
 
 //  	EA_vCls();
 //  	EA_vDisplay(1, "    GPRS数据传输    ");
@@ -82,15 +82,18 @@ INT8U gprs_send_record(void)
 //  	EA_vDisplay(3, (void *)str);
 //  	(void)EA_uiInkeyMs(1200);
 
-		last_record_no = i;
+//  	last_record_no = i;
+//
+//  	package_num = (DevStat.record_number - i)/14;//14条一个包，可以打包的整数倍
+//
+//  	package_left = (DevStat.record_number - i)%14;//剩余条数
+		
+		package_num = (DevStat.record_number)/14;//14条一个包，可以打包的整数倍
+		package_left = (DevStat.record_number)%14;//剩余条数
 
-		package_num = (DevStat.record_number - i)/14;//14条一个包，可以打包的整数倍
-		
-		package_left = (DevStat.record_number - i)%14;//剩余条数
-		
 		package_index = 0;
 
-		record_index = last_record_no + 1;
+//  	record_index = last_record_no + 1;
 
 		if ( EA_ucPFOpen((uchar *)currecFileName, &ucOpenID) != EM_ffs_SUCCESS )
 		{
@@ -190,7 +193,7 @@ INT8U gprs_send_record(void)
 
 			if( ret == ok )
 			{
-				DevStat.send_total_num += 14;
+//  			DevStat.send_total_num += 14;
 				sprintf((void *)str, "正在上传%03d条", package_index*14);
 				EA_vDisplay(3, (void *)str);
 				//SleepMs(1000);
@@ -222,7 +225,7 @@ INT8U gprs_send_record(void)
 			}
 			sprintf((void *)sendbuf, "@START%02X%02X%02XUPDD%03d", DevStat.equ_id[0], DevStat.equ_id[1], DevStat.equ_id[2], package_left * REC_LEN);//上传记录
 			sendbuf_len = 19;
-			for(j=0;j<package_left;j++)
+			for( j=0; j<package_left; j++ )
 			{			
 				(void)EA_ucPFReadRec(ucOpenID, record_index, 1, &uiReadCnt, p);
 				record_index ++;
@@ -304,7 +307,7 @@ INT8U gprs_send_record(void)
 			ret = GPRS_Send_Receive(sendbuf, package_left*REC_LEN + 19);		
 			if( ret == ok )
 			{
-				DevStat.send_total_num = 0;
+//  			DevStat.send_total_num = 0;
 				sprintf((void *)str, "正在上传%02d条", (package_num)*14 + package_left);
 				EA_vDisplay(2, (void *)str);
 
