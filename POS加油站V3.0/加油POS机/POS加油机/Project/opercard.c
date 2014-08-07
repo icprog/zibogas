@@ -838,6 +838,8 @@ INT8U download_price_table(void)
 {
 	INT8U   sendbuf[1024];
 	uchar   ret = 0;
+	BUS_TIME btime;
+	int 	sendlen;
 
 	lcddisperr("更新油价表");
 	EA_vCls();     
@@ -855,10 +857,18 @@ INT8U download_price_table(void)
 
 	memset(sendbuf, 0x00, sizeof(sendbuf));
 
-	sprintf((void *)sendbuf, "@START%02X%02X%02XUPYJ000",
-		 DevStat.equ_id[0], DevStat.equ_id[1], DevStat.equ_id[2]);
-	
-	ret = GPRS_Send_Receive(sendbuf, 19);
+	sprintf((void *)sendbuf, "@START%02X%02X%02XUPYJ004%02X%02X",
+		 DevStat.equ_id[0], DevStat.equ_id[1], DevStat.equ_id[2], DevStat.acnt_id[0], DevStat.acnt_id[1]);
+	sendlen = 19 + 4;
+
+	if(DevStat.price[0] == 0)
+	{
+		sprintf((void *)sendbuf, "@START%02X%02X%02XUPYJ005%02X%02X0",
+			 DevStat.equ_id[0], DevStat.equ_id[1], DevStat.equ_id[2], DevStat.acnt_id[0], DevStat.acnt_id[1]);
+		sendlen = 20 + 4;
+	}
+
+	ret = GPRS_Send_Receive(sendbuf, sendlen);
 	if( ret != ok )
 	{
 		EA_vCls();
@@ -870,7 +880,18 @@ INT8U download_price_table(void)
 		return notok;
 	}
 
+	Get_Time(&btime);
+	if(btime.year * 10000 + btime.month * 1000 + btime.day * 100 + btime.hour * 10 + btime.minute
+	   >= DevStat.effect_time.year * 10000 + DevStat.effect_time.month * 1000 + DevStat.effect_time.day * 100 + DevStat.effect_time.hour * 10 + DevStat.effect_time.minute)
+	{
+		DevStat.price[0] = DevStat.price_backup[0];
+		DevStat.price[1] = DevStat.price_backup[1];
+		DevStat.price[2] = DevStat.price_backup[2];
+		DevStat.price[3] = DevStat.price_backup[3];
+	}
+	
 	WriteParam();
+
 	lcddisperr("油价更新成功");
 //  GPRS_Close();
 	return ok;
@@ -1219,6 +1240,17 @@ void TextHeadDisplayTimer(void)
 	sprintf((void *)buf, "%02X%02X-%02X-%02X %02X:%02X",
 			ltime.century, ltime.year, ltime.month, ltime.day, ltime.hour, ltime.minute);
 	EA_vTextOut(0, 0, EM_key_FONT8X16, 0, 1, 1, (char *)buf);
+
+	if(ltime.year * 10000 + ltime.month * 1000 + ltime.day * 100 + ltime.hour * 10 + ltime.minute
+	   >= DevStat.effect_time.year * 1000 + DevStat.effect_time.month * 1000 + DevStat.effect_time.day * 100 + DevStat.effect_time.hour * 10 + DevStat.effect_time.minute)
+	{
+		DevStat.price[0] = DevStat.price_backup[0];
+		DevStat.price[1] = DevStat.price_backup[1];
+		DevStat.price[2] = DevStat.price_backup[2];
+		DevStat.price[3] = DevStat.price_backup[3];
+
+		WriteParam();
+	}
 }
 /*****************************************************************
 函数原型：INT8U Logout(void)

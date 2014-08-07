@@ -203,8 +203,11 @@ typedef struct _DEV_STAT
 	INT32U  price[4];                   //单价
 
 /*--------------------20070131新增加的--------------------*/
-	INT8U   acnt_id[2];                   //商户号编码
-	INT8U   equ_id[3];                    //设备编码
+	INT8U   acnt_id[2];                 //商户号编码
+	INT8U   equ_id[3];                  //设备编码
+	BUS_TIME effect_time;               //油价更新生效时间
+	INT32U  price_backup[4];            //待更新的燃料单价
+//  INT8U   update_price_done;			//1,表示已经更新过了，0，表示没有更新
 	INT8U   end;
 }DEV_STAT;
 

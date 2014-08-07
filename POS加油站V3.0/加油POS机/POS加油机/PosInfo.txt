@@ -2,9 +2,7 @@
 
 ±‡“Î÷–...
 
-main.c
-
-opercard.c
+SIM200.c
 
 ¡¥Ω”÷–...
 

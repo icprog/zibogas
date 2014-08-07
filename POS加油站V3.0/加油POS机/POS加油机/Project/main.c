@@ -6,6 +6,14 @@ All rights riserved.
 模块名称：淄博加油POS机主程序
 功能概要：淄博加油POS机主程序 
  
+ 
+ 
+当前版本：0.1.2  
+    	  1.设置油价更新有效时间
+    	  2.修改油价时候，手动的需要先输入密码后，才能修改
+    	  3.从服务器中下载生效时间设定功能
+		  4.手动修改油价后，将日志信息上传
+ 
 当前版本：0.1.0  
 当前版本：0.0.9 
     	  1.将所有的float的数据类型，全部转换为double类型
@@ -52,7 +60,7 @@ All rights riserved.
 DEV_STAT    DevStat;				//设备状态
 CARD_INFO 	CardInfo;				//卡片信息，交易记录由此变量生成
 ERROR_CARD_INFO ErrCardInfo;	    //出错卡状态
-const char *VERSION = "VER:0.1.0";  //版本号
+const char *VERSION = "VER:0.1.2";  //版本号
 
 //char dbuf[100];
 
@@ -1117,51 +1125,62 @@ void TimeModify(void)
 	INT8U buf[50];
 	BUS_TIME ltime;
 
+
 	for ( ;; )
 	{
 		EA_vCls();
-		Get_Time(&ltime);
-		EA_vDisp(1, 1, "当前时间:");
-		sprintf((void *)buf, "%02X%02X-%02X-%02X-%02X:%02X:%02X", ltime.century, ltime.year, ltime.month,
-				ltime.day, ltime.hour, ltime.minute, ltime.second);
+//  	Get_Time(&ltime);
+		EA_vDisp(1, 1, "当前生效时间:");
+		sprintf((void *)buf, "       %02X:%02X        ", DevStat.effect_time.hour, DevStat.effect_time.minute);
 		EA_vDisp(2, 1, (void *)buf);
 		EA_vDisp(3, 1, "请输入新的时间:");
 		(void)EA_ucClrKeyBuf();
 		strcpy((void *)input, "");
 
-		i = EA_ucGetInputStr(4, 1, 20, EM_BIG_FONT | EM_MODE_NUMBER | EM_ALIGN_LEFT | EM_SHOW_ORIGINALLY
-		, 14, 14, 0, (void *)input);
+		i = EA_ucGetInputStr(4, 8, 20, EM_BIG_FONT | EM_MODE_NUMBER | EM_ALIGN_LEFT | EM_SHOW_ORIGINALLY
+		, 2, 2, 0, (void *)input);
 		if ( i == EM_ABOLISH )
 			return;
 		if ( i != EM_SUCCESS )
 			continue;
 		
+		i = EA_ucGetInputStr(4, 11, 20, EM_BIG_FONT | EM_MODE_NUMBER | EM_ALIGN_LEFT | EM_SHOW_ORIGINALLY
+		, 2, 2, 0, (void *)input);
+		if ( i == EM_ABOLISH )
+			return;
+		if ( i != EM_SUCCESS )
+			continue;
 		//  	sprintf(dbuf, "%s", input);
 		//  	EA_vDisp(3, 1, dbuf);
 		//  	sprintf(dbuf, "result:%02X", i);
 		//  	EA_vDisp(4, 1, dbuf);
 
-		ltime.century = (ascii_to_hex(input[0]) << 4) | ascii_to_hex(input[1]);
-		ltime.year = (ascii_to_hex(input[2]) << 4) | ascii_to_hex(input[3]);
-		ltime.month = (ascii_to_hex(input[4]) << 4) | ascii_to_hex(input[5]);
-		ltime.day = (ascii_to_hex(input[6]) << 4) | ascii_to_hex(input[7]);
 		ltime.hour = (ascii_to_hex(input[8]) << 4) | ascii_to_hex(input[9]);
-		ltime.minute = (ascii_to_hex(input[10]) << 4) | ascii_to_hex(input[11]);
-		ltime.second = (ascii_to_hex(input[12]) << 4) | ascii_to_hex(input[13]);
+		ltime.minute = (ascii_to_hex(input[11]) << 4) | ascii_to_hex(input[12]);
 
-		i = CheckTimeFormat(&ltime);
-		if ( i != ok )
+		if ( ltime.hour > 0x23 )       //小时应在0-23之间
+			return ;
+
+
+		
+		if ( ltime.minute > 0x59 )                                   //分钟应在0-59之间
+			return ;
+
+
+		if ( (ltime.hour > 0x23) || (ltime.minute > 0x59) )
 		{
 			EA_vCls();
 			EA_vDisp(4, 1, "时间格式错误");
 			SleepMs(1500);
-			//  		EA_vCls();
 			continue;
 		}
 
-		Modify_Time(&ltime);
+		DevStat.effect_time.hour = ltime.hour;
+		DevStat.effect_time.minute = ltime.minute;
+		WriteParam();
+
 		EA_vCls();
-		EA_vDisp(4, 1, "时间修改成功");
+		EA_vDisp(4, 1, "生效时间修改成功");
 		SleepMs(1500);
 		break;
 	}

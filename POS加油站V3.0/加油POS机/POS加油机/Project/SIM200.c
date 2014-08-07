@@ -16,7 +16,7 @@ extern const char hisrecFileName[];
 extern const char grayrecFileName[];
 
 extern int socketID;
-
+uchar sendbuf[1024];
 /******************************************************************************
  函数名称：gprs_send_record
  功能描述：GPRS上传记录
@@ -37,7 +37,7 @@ INT8U gprs_send_record(void)
 	uchar ucOpenID = 0;
 	uint  uiReadCnt;
 	short i=0,j=0;
-	uchar sendbuf[1024];
+
 	uint  sendbuf_len = 0;
 	INT8U str[50];
 	INT8U p[60];
@@ -381,7 +381,126 @@ int  PackageCheck(char * buff, int len)
 
 }
 
+/******************************************************************************
+ 函数名称：upload_price_log
+ 功能描述：GPRS命令处理
+ 参数名称：输入/输出？	类型		描述
+输入		    data	数据
+				
+ 返  回  值：无
+ 
+ 作      者	：老刘
+ 日      期：2014-08-05
+ 修改历史：
+		日期		修改人		修改描述
+******************************************************************************/
+int upload_price_log(void)
+{
+	int sendbuf_len = 0;
+	BUS_TIME ltime;
+	INT8U ret;
 
+	Get_Time(&ltime);
+
+	EA_vCls();
+	EA_vDisplay(2, "  上传更新油价日志  ");
+	if( open_gprs_module() != ok )
+	{
+		lcddisperr("PPP拨号连接失败");
+		Beeperr();
+		GPRS_Close();
+		return notok;
+	}
+
+	sprintf((void *)sendbuf, "@START%02X%02X%02XUPLG048", DevStat.equ_id[0], DevStat.equ_id[1], DevStat.equ_id[2]);//上传记录
+	sendbuf_len = 19;
+
+	//	2B 商户号
+	var_bcd2asc(sendbuf+sendbuf_len, DevStat.acnt_id, 2);
+	sendbuf_len+=4;
+	#ifdef _zb_debug_sendrec_
+	scrShowMsgInfo((char *)"MID", sendbuf+sendbuf_len-4, 4, ORG_ASCII);
+	#endif
+	//	3B 操作员
+	var_bcd2asc(sendbuf+sendbuf_len, DevStat.oper_cardno, 3); 
+	sendbuf_len+=6;     	
+	#ifdef _zb_debug_sendrec_
+	scrShowMsgInfo((char *)"operid", sendbuf+sendbuf_len-6, 6, ORG_ASCII);
+	#endif
+
+//  1B HEX  -- 2B ascii加油类型
+	var_bcd2asc(sendbuf+sendbuf_len, (uchar *)0x00, 1);
+	sendbuf_len+=2;
+#ifdef _zb_debug_sendrec_
+	scrShowMsgInfo((char *)"fuel Type", sendbuf+sendbuf_len-2, 2, ORG_ASCII);
+#endif
+
+//  4B HEX  -- 加油单价
+	sprintf((char*)(sendbuf+sendbuf_len), "%04d", DevStat.price[0]);
+	sendbuf_len+=4;
+#ifdef _zb_debug_sendrec_
+	scrShowMsgInfo((char *)"fuel price", sendbuf+sendbuf_len-4, 4, ORG_ASCII);
+#endif
+
+	//  1B HEX  -- 2B ascii加油类型
+	var_bcd2asc(sendbuf+sendbuf_len, (uchar *)0x01, 1);
+	sendbuf_len+=2;
+#ifdef _zb_debug_sendrec_
+	scrShowMsgInfo((char *)"fuel Type", sendbuf+sendbuf_len-2, 2, ORG_ASCII);
+#endif
+
+//  4B HEX  -- 加油单价
+	sprintf((char*)(sendbuf+sendbuf_len), "%04d", DevStat.price[1]);
+	sendbuf_len+=4;
+#ifdef _zb_debug_sendrec_
+	scrShowMsgInfo((char *)"fuel price", sendbuf+sendbuf_len-4, 4, ORG_ASCII);
+#endif
+
+	//  1B HEX  -- 2B ascii加油类型
+	var_bcd2asc(sendbuf+sendbuf_len, (uchar *)0x02, 1);
+	sendbuf_len+=2;
+#ifdef _zb_debug_sendrec_
+	scrShowMsgInfo((char *)"fuel Type", sendbuf+sendbuf_len-2, 2, ORG_ASCII);
+#endif
+
+//  4B HEX  -- 加油单价
+	sprintf((char*)(sendbuf+sendbuf_len), "%04d", DevStat.price[2]);
+	sendbuf_len+=4;
+#ifdef _zb_debug_sendrec_
+	scrShowMsgInfo((char *)"fuel price", sendbuf+sendbuf_len-4, 4, ORG_ASCII);
+#endif
+
+	//  1B HEX  -- 2B ascii加油类型
+	var_bcd2asc(sendbuf+sendbuf_len, (uchar *)0x03, 1);
+	sendbuf_len+=2;
+#ifdef _zb_debug_sendrec_
+	scrShowMsgInfo((char *)"fuel Type", sendbuf+sendbuf_len-2, 2, ORG_ASCII);
+#endif
+
+//  4B HEX  -- 加油单价
+	sprintf((char*)(sendbuf+sendbuf_len), "%04d", DevStat.price[3]);
+	sendbuf_len+=4;
+#ifdef _zb_debug_sendrec_
+	scrShowMsgInfo((char *)"fuel price", sendbuf+sendbuf_len-4, 4, ORG_ASCII);
+#endif
+
+//  7B -- YYYYMMDDHHMMSS -- BCD
+	var_bcd2asc(sendbuf+sendbuf_len, (uchar *)&ltime, 7);	
+	sendbuf_len+=14;
+#ifdef _zb_debug_sendrec_
+	scrShowMsgInfo((char *)"Date time", sendbuf+sendbuf_len-14, 14, ORG_ASCII);
+#endif
+			
+	sendbuf[sendbuf_len] = 0;
+
+	ret = GPRS_Send_Receive(sendbuf, sendbuf_len);
+
+	if( ret == ok )
+		return ok;
+	else
+		return notok;
+
+}
 /******************************************************************************
  函数名称：Gprs_Upload_data
  功能描述：GPRS命令处理
@@ -395,7 +514,6 @@ int  PackageCheck(char * buff, int len)
  修改历史：
 		日期		修改人		修改描述
 ******************************************************************************/
-
 int Gprs_Upload_data(void)
 {
 	char 		buf[30];
@@ -507,7 +625,6 @@ INT8U SaveNoteRecord(unsigned char * NoteRecord)
 INT8U gprs_test(void)
 {
 	uchar ucRet;
-	INT8U  sendbuf[50];
 
 	EA_vCls();
 	EA_vDisp(1,1,"    GPRS连接测试    ");

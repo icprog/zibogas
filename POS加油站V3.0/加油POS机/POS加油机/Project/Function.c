@@ -35,7 +35,7 @@ extern const char grayrecFileName[];
 // *****************************************************************
 // 功能：		参数设置界面
 // *****************************************************************
-INT8U  parm_set[9*20 +2] = {"1.油价调整          2.油品设置          3.记录查询          4.设备号设置        5.站点号设置        6.密码修改          7.重打上次小票      8.IP地址设置        9.修改加油员卡密码  "};
+INT8U  parm_set[10*20 +2] = {"1.油价调整          2.油品设置          3.记录查询          4.设备号设置        5.站点号设置        6.密码修改          7.重打上次小票      8.IP地址设置        9.修改加油员卡密码  10.油价生效时间设定 "};
 INT8U  gas_set[4*20 +2]   = {"1.天然气            2.汽油93#           3.汽油97#           4.柴油              "}; 
 INT8U  rec_query[2*20 +2] = {"1.日结单查询        2.单笔记录查询      "}; 
 // *****************************************************************
@@ -291,6 +291,10 @@ int Parm_Setting(void)
 		   case 8:
 			   oper_code_setting();
 			   break;
+		   case 9:
+//  		   DateTime_Setting(void);
+			   break;
+
 		   case -1://返回上级菜单
 				return -1;
 
@@ -535,6 +539,7 @@ void price_Setting(void)
 	uchar   i;
 	double   temp_price;
 	INT8U   price_menu[2*20 + 2] = {"1.自动              2.手动              "};
+	INT16U key = EM_key_NOHIT;
 
 	memset(buf, 0, sizeof(buf));
 
@@ -555,7 +560,20 @@ void price_Setting(void)
 			break;
 
 		case 1:	// 手动设置
-
+			EA_ucClrKeyBuf();
+			switch ( PasswordCheck() )
+			{
+				case notok:
+					printf_debug((void *)"密码错误");
+					return ;
+				case 2:
+					return ;
+				case ok:
+					EA_ucClrKeyBuf();
+					break;
+				default:
+					return ;
+			}
 			//当前油价显示
 			EA_vCls();
 			EA_ucClrKeyBuf();
@@ -564,59 +582,92 @@ void price_Setting(void)
 			EA_vDisplay(2, "汽油93#:%2.2f元/升 ", DevStat.price[1]/100.0);
 			EA_vDisplay(3, "汽油97#:%2.2f元/升 ", DevStat.price[2]/100.0);
 			EA_vDisplay(4, "柴  油 :%2.2f元/升 ", DevStat.price[3]/100.0);
+			EA_vDisplay(5, "按数字键改相应的油价");
 
-			for ( ;; )
+			key = EA_uiInkey(0);
+			switch ( key )
 			{
-				i = get_input_str(1, 11, 1, 6, (void *)input);
-				if ( i == EM_SUCCESS )
-					break;
-				if ( i == EM_ABOLISH )
+			   case EM_key_1:
+				EA_vCls();
+			    EA_ucClrKeyBuf();
+				EA_vDisplay(1, "天然气 :%2.2f元/立方", DevStat.price[0]/100.0);
+				EA_vDisplay(2, "调整价 :%2.2f元/立方", DevStat.price[0]/100.0);
+				for ( ;; )
+				{
+					i = get_input_str(2, 11, 1, 6, (void *)input);
+					if ( i == EM_SUCCESS )
+						break;
+					if ( i == EM_ABOLISH )
+						return ;
+				}
+
+				sscanf((void *)input, "%lf", &temp_price);
+				DevStat.price[0] = temp_price * 100;
+				   break;
+
+				case EM_key_2:
+				EA_vCls();
+			    EA_ucClrKeyBuf();
+				EA_vDisplay(1, "汽油93#:%2.2f元/升 ", DevStat.price[1]/100.0);
+				EA_vDisplay(2, "调整价 :%2.2f元/升 ", DevStat.price[1]/100.0);
+				for ( ;; )
+				{
+					i = get_input_str(2, 11, 1, 6, (void *)input);
+					if ( i == EM_SUCCESS )
+						break;
+					if ( i == EM_ABOLISH )
+						return ;
+				}
+				sscanf((void *)input, "%lf", &temp_price);
+				DevStat.price[1] = temp_price * 100;
+				   break;
+
+				case EM_key_3:
+				EA_vCls();
+			    EA_ucClrKeyBuf();
+				EA_vDisplay(1, "汽油97#:%2.2f元/升 ", DevStat.price[2]/100.0);
+				EA_vDisplay(2, "调整价 :%2.2f元/升 ", DevStat.price[2]/100.0);
+				for ( ;; )
+				{
+					i = get_input_str(2, 11, 1, 6, (void *)input);
+					if ( i == EM_SUCCESS )
+						break;
+					if ( i == EM_ABOLISH )
+						return ;
+				}
+
+				sscanf((void *)input, "%lf", &temp_price);
+				DevStat.price[2] = temp_price * 100;
+				   break;
+
+				case EM_key_4:
+				EA_vCls();
+			    EA_ucClrKeyBuf();
+				EA_vDisplay(1, "柴  油 :%2.2f元/升 ", DevStat.price[3]/100.0);
+				EA_vDisplay(2, "调整价 :%2.2f元/升 ", DevStat.price[3]/100.0);
+				for ( ;; )
+				{
+					i = get_input_str(2, 11, 1, 6, (void *)input);
+					if ( i == EM_SUCCESS )
+						break;
+					if ( i == EM_ABOLISH )
+						return ;
+				}
+
+				sscanf((void *)input, "%lf", &temp_price);
+				DevStat.price[3] = temp_price * 100;
+				   break;
+
+				case EM_key_ENTER:
+					
+
+					lcddisperr("更新油价成功");
+					WriteParam();
+					return;
+				default: 
 					return ;
 			}
-
-			sscanf((void *)input, "%lf", &temp_price);
-			DevStat.price[0] = temp_price * 100;
-
-			for ( ;; )
-			{
-				i = get_input_str(2, 11, 1, 6, (void *)input);
-				if ( i == EM_SUCCESS )
-					break;
-				if ( i == EM_ABOLISH )
-					return ;
-			}
-			sscanf((void *)input, "%lf", &temp_price);
-			DevStat.price[1] = temp_price * 100;
-
-			for ( ;; )
-			{
-				i = get_input_str(3, 11, 1, 6, (void *)input);
-				if ( i == EM_SUCCESS )
-					break;
-				if ( i == EM_ABOLISH )
-					return ;
-			}
-
-			sscanf((void *)input, "%lf", &temp_price);
-			DevStat.price[2] = temp_price * 100;
-
-			for ( ;; )
-			{
-				i = get_input_str(4, 11, 1, 6, (void *)input);
-				if ( i == EM_SUCCESS )
-					break;
-				if ( i == EM_ABOLISH )
-					return ;
-			}
-
-			sscanf((void *)input, "%lf", &temp_price);
-			DevStat.price[3] = temp_price * 100;
-
-			sscanf((void *)input, "%lf", &temp_price);
-			
-			WriteParam();
-			break;
-
+	
 		default: 
 			return ;
 		//	break;

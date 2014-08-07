@@ -735,6 +735,7 @@ void param_factory_default(INT8U level)
 	DevStat.mode = 0x00;
 	DevStat.samcompcode = 1;
 	DevStat.Gprs_On_Flag = 0;
+	DevStat.effect_time.hour = 0x07;
 	memset(&DevStat.binhand, 0x00, sizeof(DevStat.binhand));
 
 	WriteParam();

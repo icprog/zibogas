@@ -72,15 +72,14 @@ int FindStr(unsigned char * data, int index_num)
 	int		 DataLength = 0, ret = 0;
 	INT8U    input_buffer[20+2];
 	BUS_TIME LOCAL_V_TYPE time;
-
-	char    temp_data[200];
 	char  	RevBuff[1024];
+	char    temp_data[200];
 	ulong  	black_length=0;
 	ulong  	tolanum=0;
 	uint 	uiOpenID = 0;
 	INT16U  black_number;  
 	unsigned char   tmp_kind;
-	uchar   tmp_price[8]; 
+	//uchar   tmp_price[8]; 
 
 	memset(temp_data, 0x00, sizeof(temp_data));
 
@@ -155,7 +154,7 @@ int FindStr(unsigned char * data, int index_num)
 
 			if( (memcmp(RevBuff+12, "UPYJ", 4) == 0) ) //油价表
 			{			
-				if( memcmp(RevBuff+16,"024",3) == 0 ) 
+				if( memcmp(RevBuff+16, "038", 3) == 0 ) 
 				{
 					for( k = 0; k < 4; k ++ )
 					{
@@ -164,37 +163,45 @@ int FindStr(unsigned char * data, int index_num)
 						switch( tmp_kind )	
 						{
 						   case 0:  
-							   DevStat.price[0] = a_to_h(RevBuff[21]) * 1000+a_to_h(RevBuff[22])* 100+
-							   a_to_h(RevBuff[23]) * 10+a_to_h(RevBuff[24]) ;
+							   DevStat.price_backup[0] = a_to_h(RevBuff[21]) * 1000+a_to_h(RevBuff[22])* 100+
+							   a_to_h(RevBuff[23]) * 10+a_to_h(RevBuff[24]);
 							   break;
 						   case 1:
-							   var_asc2bcd((uchar *)&tmp_price, (uchar *)&RevBuff[31], 8);
+							   //var_asc2bcd((uchar *)&tmp_price, (uchar *)&RevBuff[31], 8);
 
-							   DevStat.price[1] =a_to_h(RevBuff[27]) * 1000+a_to_h(RevBuff[28])* 100+
-							   a_to_h(RevBuff[29]) * 10+a_to_h(RevBuff[30]) ;
+							   DevStat.price_backup[1] =a_to_h(RevBuff[27]) * 1000+a_to_h(RevBuff[28])* 100+
+							   a_to_h(RevBuff[29]) * 10+a_to_h(RevBuff[30]);
 							   break;
 						   case 2:
-							   var_asc2bcd((uchar *)&tmp_price, (uchar *)&RevBuff[41], 8);
+							   //var_asc2bcd((uchar *)&tmp_price, (uchar *)&RevBuff[41], 8);
 							
-							   DevStat.price[2] = a_to_h(RevBuff[33]) * 1000+a_to_h(RevBuff[34])* 100+
-							   a_to_h(RevBuff[35]) * 10+a_to_h(RevBuff[36]) ;
+							   DevStat.price_backup[2] = a_to_h(RevBuff[33]) * 1000+a_to_h(RevBuff[34])* 100+
+							   a_to_h(RevBuff[35]) * 10+a_to_h(RevBuff[36]);
 							   break;
 						   case 3:
-							   var_asc2bcd((uchar *)&tmp_price, (uchar *)&RevBuff[51], 8);
+							   //var_asc2bcd((uchar *)&tmp_price, (uchar *)&RevBuff[51], 8);
 							  
-							   DevStat.price[3] = a_to_h(RevBuff[39]) * 1000+a_to_h(RevBuff[40])* 100+
-							   a_to_h(RevBuff[41]) * 10+a_to_h(RevBuff[42]) ;
+							   DevStat.price_backup[3] = a_to_h(RevBuff[39]) * 1000+a_to_h(RevBuff[40])* 100+
+							   a_to_h(RevBuff[41]) * 10+a_to_h(RevBuff[42]);
 							   break;
 						   default:
 							   break;
 
 						}
-//  				    DevStat.price[k]  = (INT16U)(a_to_h(RevBuff[10*k+19 + 1]))*1000+
+//  					DevStat.price[k]  = (INT16U)(a_to_h(RevBuff[10*k+19 + 1]))*1000+
 //  										(INT16U)(a_to_h(RevBuff[10*k+19 + 2]))*100+
 //  										(INT16U)(a_to_h(RevBuff[10*k+19 + 3]))*10+
 //  										(INT16U)(a_to_h(RevBuff[10*k+19 + 4]));
 					}
-					//WriteParam();
+					//更新时间
+					{		
+						for(k=0; k<7; k++)
+							input_buffer[k] = ((a_to_h(RevBuff[2*k+24]))<<4)|((a_to_h(RevBuff[2*k+1+24]))&0x0f);
+						memcpy((INT8U*)&time, input_buffer, 7);
+						if(CheckTimeFormat(&time) != ok)
+							return 0;
+						memcpy((INT8U*)&DevStat.effect_time, (INT8U*)&time, 7);						
+					}
 					return 1;
 				}
 				return 0;			
