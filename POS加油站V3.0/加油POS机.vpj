@@ -201,7 +201,6 @@
 			Filters="*.c;*.C;*.cc;*.cpp;*.cp;*.cxx;*.c++;*.prg;*.pas;*.dpr;*.asm;*.s;*.bas;*.java;*.cs;*.sc;*.e;*.cob;*.html;*.rc;*.tcl;*.py;*.pl;*.d;*.m;*.mm">
 			<F N="加油POS机/POS加油机/Project/DB.C"/>
 			<F N="加油POS机/POS加油机/Project/Function.c"/>
-			<F N="ICcard.c"/>
 			<F N="加油POS机/POS加油机/Project/M1card.c"/>
 			<F N="加油POS机/POS加油机/Project/main.c"/>
 			<F N="加油POS机/POS加油机/Project/Menu.c"/>

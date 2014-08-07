@@ -1070,25 +1070,24 @@ uchar download_whiltelist(void)
 }
 
 /*****************************************************************
-函数原型：Login
-功能描述：本函数为操作员登陆窗口
-参数描述：无
-参数名称：	输入/输出？	类型		描述
+函数原型： Login
+功能描述： 本函数为操作员登陆窗口
+参数描述： 无
+参数名称： 输入/输出？	类型		描述
 -----------		-----------	------	   	-------
-返 回 值：无
+返 回 值： 无
 *****************************************************************/
 void  Login(void)
 {
-
 	INT8U   	ret;
 	uchar   	uckey;
 	uint    	uikey;
-	INT8U   	record[60];
+	//INT8U   	record[57];
 	BUS_TIME    ltime;
 
 	EA_vCls();
 
-	memset(record, 0x00, sizeof(record));
+	//memset(record, 0x00, sizeof(record));
 
 	if( DevStat.driver_is_working == FALSE )  //未上班
 	{
@@ -1103,13 +1102,13 @@ void  Login(void)
 			Get_Time(&ltime); 
 			memcpy(&DevStat.binhand.work_datetime, &ltime, sizeof(BUS_TIME));
 
-			memcpy(DevStat.binhand.acnt_id, DevStat.acnt_id, 2);
-			memcpy(DevStat.binhand.equ_id, DevStat.equ_id, 3);
-			memcpy(&DevStat.binhand.oper_id[0], DevStat.oper_cardno, 3);
+			memcpy((INT8U *)&DevStat.binhand.acnt_id[0], (INT8U *)&DevStat.acnt_id[0], 2);
+			memcpy((INT8U *)&DevStat.binhand.equ_id[0], (INT8U *)&DevStat.equ_id[0], 3);
+			memcpy((INT8U *)&DevStat.binhand.oper_id[0], (INT8U *)&DevStat.oper_cardno[0], 3);
 
-			memset(DevStat.binhand.consume_cnt, 0, 16);
-			memset(DevStat.binhand.consume_cap, 0, 16);
-			memset(DevStat.binhand.consume_amt, 0, 16);
+			memset((INT8U *)&DevStat.binhand.consume_cnt[0], 0, 8);
+			memset((INT8U *)&DevStat.binhand.consume_cap[0], 0, 16);
+			memset((INT8U *)&DevStat.binhand.consume_amt[0], 0, 16);
 
 			DevStat.driver_is_working = TRUE;
 			WriteParam();		

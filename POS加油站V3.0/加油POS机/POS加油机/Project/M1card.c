@@ -395,7 +395,7 @@ cardinfo	输入			CARD_INFO*	交易完毕后的卡片的所有信息
 INT8U StoreRecord(CARD_INFO *cardinfo)
 {
 	INT8U  i = 0;
-	INT8U  record[60];
+	INT8U  record[57];
 	INT32U temp_int32u = 0;
 	uchar  buf[100];
 	int    buf_len = 0;
@@ -416,30 +416,29 @@ INT8U StoreRecord(CARD_INFO *cardinfo)
 		temp_int32u = 2000;
 	}
 
-	memcpy(prec->pos_purchase_serial_num, cardinfo->purchase_serial_num, 3);
+	memcpy((INT8U *)&prec->pos_purchase_serial_num[0], (INT8U *)&cardinfo->purchase_serial_num[0], 3);
 	var_bcd2asc(buf+buf_len, prec->pos_purchase_serial_num, 3);
 	buf_len+=6;
 #ifdef _zb_debug_tran_
 	scrShowMsgInfo((char *)"num", buf+buf_len-6, 6, ORG_ASCII);
 #endif
-
-    memcpy(&prec->bus_number[0], &cardinfo->bus_number[0], 5);				//车牌号
+	//车牌号
+    memcpy((INT8U *)&prec->bus_number[0], (INT8U *)&cardinfo->bus_number[0], 5);				
 //  var_bcd2asc(buf+buf_len, &cardinfo->bus_number[0], 5);
 	memcpy(buf+buf_len, &prec->bus_number[0], 5);
 	buf_len+=5;
 #ifdef _zb_debug_tran_
 		scrShowMsgInfo((char *)"bus_num", buf+buf_len-5, 5, ORG_ASCII);
 #endif
-															
-	memcpy((void *)&prec->card_in_time, &cardinfo->card_in_time, 7);		//交易日期4字节和时间 3字节
-
+	//交易日期4字节和时间 3字节
+	memcpy((BUS_TIME *)&prec->card_in_time, (BUS_TIME *)&cardinfo->card_in_time, 7);		
 	var_bcd2asc(buf+buf_len, (uchar *)&prec->card_in_time, 7);
 	buf_len+=14;
 #ifdef _zb_debug_tran_
 		scrShowMsgInfo((char *)"date", buf+buf_len-14, 14, ORG_ASCII);
 #endif
-
-//  memset(tmpbuf, 0, 10);                                                  //加油金额
+	//加油金额
+//  memset(tmpbuf, 0, 10);                                                  
 //  packInt(tmpbuf, cardinfo->fare);
 	memcpy(&prec->fare, &cardinfo->fare, 4);
 //  var_bcd2asc(buf+buf_len, (uchar *)&cardinfo->fare, 4);
@@ -483,6 +482,7 @@ INT8U StoreRecord(CARD_INFO *cardinfo)
 	memcpy(&prec->fuel_type, &DevStat.fill_mode, 1);                        //油品
 	var_bcd2asc(buf+buf_len, &prec->fuel_type, 1);
 	buf_len+=2;
+
 #ifdef _zb_debug_tran_
 		scrShowMsgInfo((char *)"fuel_type", buf+buf_len-2, 2, ORG_ASCII);
 #endif	
@@ -572,54 +572,56 @@ INT8U StoreRectoSD(RECORD * prec)
 #ifdef _zb_debug_sd_
 		Debugprintf((char *)"<<<<<<<<<<<<<_debug_sd_<<<<<<<<<<<<\n");
 #endif
+	//4B 商户号
 	var_bcd2asc(buf+buf_len, prec->acnt_id, 2);
 	buf_len+=4;
 #ifdef _zb_debug_sd_
 		scrShowMsgInfo((char *)"acnt_id", buf+buf_len-4, 4, ORG_ASCII);
 #endif
-
+	//6B 设备编号
 	var_bcd2asc(buf+buf_len, prec->equ_id, 3);
 	buf_len+=6;
 #ifdef _zb_debug_sd_
 		scrShowMsgInfo((char *)"equ_id", buf+buf_len-6, 6, ORG_ASCII);
 #endif
-
+	//6B 操作员号
 	var_bcd2asc(buf+buf_len, &prec->oper_id[0], 3);
 	buf_len+=6;
 #ifdef _zb_debug_sd_
 		scrShowMsgInfo((char *)"oper_id", buf+buf_len-6, 6, ORG_ASCII);
 #endif
-
+	//6B 交易序号号
 	var_bcd2asc(buf+buf_len, prec->pos_purchase_serial_num, 3);
 	buf_len+=6;
 #ifdef _zb_debug_sd_
 	scrShowMsgInfo((char *)"num", buf+buf_len-6, 6, ORG_ASCII);
 #endif
+//5B 车号
 	memcpy(buf+buf_len, &prec->bus_number[0], 5);
 //  var_bcd2asc(buf+buf_len, &prec->bus_number[0], 5);
 	buf_len+=5;
 #ifdef _zb_debug_sd_
 		scrShowMsgInfo((char *)"bus_num", buf+buf_len-5, 5, ORG_ASCII);
 #endif
-
+	//6B 加油员号
 	var_bcd2asc(buf+buf_len, &prec->driver_no[0], 3);
  buf_len+=6;
 #ifdef _zb_debug_sd_
 	 scrShowMsgInfo((char *)"driver_no", buf+buf_len-6, 6, ORG_ASCII);
 #endif
-
+	//1B 加油种类
 	var_bcd2asc(buf+buf_len, &prec->fuel_type, 1);
 	buf_len+=2;
 #ifdef _zb_debug_sd_
 		scrShowMsgInfo((char *)"fuel_type", buf+buf_len-2, 2, ORG_ASCII);
 #endif	
-
+	//8B 加油单价
 	sprintf((char *)(buf+buf_len), "%08d", prec->price);
 	buf_len+=8;
 #ifdef _zb_debug_sd_
 		scrShowMsgInfo((char *)"fuel_price", buf+buf_len-8, 8, ORG_ASCII);
 #endif
-
+		//8B 加油金额
 //  var_bcd2asc(buf+buf_len, (uchar *)&prec->fare, 4);
 	sprintf((char *)(buf+buf_len), "%08d", prec->fare);
 	buf_len+=8;
@@ -628,12 +630,13 @@ INT8U StoreRectoSD(RECORD * prec)
 #endif	
 
 //  var_bcd2asc(buf+buf_len, (uchar *)&prec->capacity, 4);
+		//8B 加油升数
 	sprintf((char *)(buf+buf_len), "%08d", prec->capacity);
 	buf_len+=8;
 #ifdef _zb_debug_sd_
 		scrShowMsgInfo((char *)"cap", buf+buf_len-8, 8, ORG_ASCII);
 #endif	
-
+//14B 加油时间
 	var_bcd2asc(buf+buf_len, (uchar *)&prec->card_in_time, 7);
 	buf_len+=14;
 #ifdef _zb_debug_sd_
@@ -948,17 +951,18 @@ reboot:
 	}
 	CardInfo.card_purchase_type = TT_NORMAL_CONSUME;		 //普通卡正常交易
 	//保存设备交易序号	
-	temp_int32u = ((INT32U)DevStat.dev_trade_no[0] << 16) |((INT16U)DevStat.dev_trade_no[1] << 8) |((INT16U)DevStat.dev_trade_no[2]); 	//初始交易序号
+	temp_int32u = ((INT32U)DevStat.dev_trade_no[0] << 16) | ((INT16U)DevStat.dev_trade_no[1] << 8) | ((INT16U)DevStat.dev_trade_no[2]); 	//初始交易序号
 	if ( temp_int32u >= 0xF423F )   //消费大于999999
 		temp_int32u = 0;
 	else
 		temp_int32u++;
 
-	DevStat.dev_trade_no[0] = (INT8U)(temp_int32u >> 16);			//+1后的交易序号
-	DevStat.dev_trade_no[1] = (INT8U)(temp_int32u >> 8);			//+1后的交易序号
-	DevStat.dev_trade_no[2] = (INT8U)temp_int32u;
+	DevStat.dev_trade_no[0] = (INT8U)(temp_int32u / 0x10000); //+1后的交易序号
+	DevStat.dev_trade_no[1] = (INT8U)(temp_int32u % 0x10000 / 0x100); //+1后的交易序号
+	DevStat.dev_trade_no[2] = (INT8U)(temp_int32u % 0x100);
 
-	memcpy(CardInfo.purchase_serial_num, DevStat.dev_trade_no, 3);
+	memcpy((INT8U *)&CardInfo.purchase_serial_num[0], (INT8U *)&DevStat.dev_trade_no[0], 3);
+
 	WriteParam();
 
 	return ok;

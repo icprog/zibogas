@@ -895,7 +895,7 @@ int Record_Query(void)
 	uchar       uckey; 
 	uint        uikey; 
 	uchar 		ucOpenID=0;
-	INT8U 		rec[100];
+	INT8U 		rec[57];
 
 	EA_vCls();
 	EA_ucClrKeyBuf();
@@ -921,7 +921,7 @@ int Record_Query(void)
 //    EA_vDisplay(1, "系统存储记录信息查询");
 //    EA_vDisplay(2, "交易记录有:%6d条", Num_rec);
 
-	if ( EA_ucPFOpen( (uchar *)hisrecFileName, &ucOpenID) != EM_ffs_SUCCESS )
+	if ( EA_ucPFOpen( (uchar *)currecFileName, &ucOpenID) != EM_ffs_SUCCESS )
 	{
 		lcddisperr("打开历史文件文件失败");
 		return 0;
@@ -946,7 +946,7 @@ int Record_Query(void)
 
 	AnalyAndDisplay((RECORD *)rec);   //加油记录查询
 
-	while ( 1 )
+	while (1)
 	{
 		uckey = EA_ucKBHit();
 		if(uckey == EM_key_HIT)    //有按键
@@ -1016,7 +1016,7 @@ int Record_Query(void)
 //// *****************************************************************
 void AnalyAndDisplay(RECORD * strTradeInfo)
 {
-	char     strbuf[50];
+	char     strbuf[22];
 	double    fBuf = 0;
 	INT8U    temp_buf[22];
 	RECORD * prec = (RECORD *)strTradeInfo;

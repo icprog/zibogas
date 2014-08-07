@@ -40,7 +40,7 @@ INT8U gprs_send_record(void)
 
 	uint  sendbuf_len = 0;
 	INT8U str[50];
-	INT8U p[60];
+	INT8U p[57];
 	int   ret=0;
 	unsigned long	  record_index = 0;
 	int   package_num=0, package_index=0, package_left=0, last_record_no=0;
@@ -63,6 +63,8 @@ INT8U gprs_send_record(void)
 	EA_vDisplay(2,"     GPRS通讯中     ");
 	EA_vDisplay(3,"      请等待...     ");
 	EA_vDisplay(4,"    传输数据中...   ");
+	sprintf((void *)str, "   共有%4d条记录   ", DevStat.record_number);
+	EA_vDisplay(5, (void *)str);
 	SleepMs(1000);
 
 	if(DevStat.record_number > 0)
