@@ -208,6 +208,7 @@ typedef struct _DEV_STAT
 	BUS_TIME effect_time;               //油价更新生效时间
 	INT32U  price_backup[4];            //待更新的燃料单价
 //  INT8U   update_price_done;			//1,表示已经更新过了，0，表示没有更新
+	INT8U   request_all_rec;
 	INT8U   end;
 }DEV_STAT;
 
@@ -346,6 +347,25 @@ typedef  struct  _RECORD
 	INT16U crc;
 }   RECORD;
 
+typedef struct _GPRS
+{
+	INT16U record_base_ptr;                 //未上传记录指针起始指针(原p0+2)
+	INT16U record_number;                   //未上传的记录条数(原p0+4)
+
+	INT8U have_driver_rec;                  //是否是司机上下班记录
+	INT16U snd_len;                         //发送长度
+	INT16U rcv_len;                         //接收长度
+
+	INT8U have_drec;						//是否有未上传的drec，是=TRUE 否=FALSE
+	INT8U update_time;						//是否准备与服务器同步时间，是=TRUE 否=FALSE
+	INT8U driver_is_working;				//上下班标志
+
+	INT16U package_num;						//包数
+	INT16U last_packgae_rec_num;			//最后一包的记录数
+
+}GPRS;
+
+//GPRS gprs;
 
 typedef struct _PREVCARDINFO
 {
@@ -680,6 +700,7 @@ INT8U download_whiltelist(void);
 ******************************************************************************/
 INT8U download_price_table(void);
 
+int Is_timeup();
 
 #endif
 

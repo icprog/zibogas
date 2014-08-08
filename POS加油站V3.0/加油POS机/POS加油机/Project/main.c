@@ -7,7 +7,6 @@ All rights riserved.
 功能概要：淄博加油POS机主程序 
  
  
- 
 当前版本：0.1.2  
     	  1.设置油价更新有效时间
     	  2.修改油价时候，手动的需要先输入密码后，才能修改
@@ -60,8 +59,8 @@ All rights riserved.
 DEV_STAT    DevStat;				//设备状态
 CARD_INFO 	CardInfo;				//卡片信息，交易记录由此变量生成
 ERROR_CARD_INFO ErrCardInfo;	    //出错卡状态
-const char *VERSION = "VER:0.1.2";  //版本号
-
+const char *VERSION = "VER:0.1.3";  //版本号
+GPRS gprs;
 //char dbuf[100];
 
 extern int socketID;

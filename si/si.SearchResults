@@ -1,0 +1,26 @@
+---- var_bcd2asc(sendbuf+sendbuf_len Matches (25 in 1 files) ----
+SIM200.c (e:\ydt\2014项目\淄博公交加油站项目\zibogas\pos加油站v3.0\加油pos机\pos加油机\project):		var_bcd2asc(sendbuf+sendbuf_len, DevStat.acnt_id, 2);
+SIM200.c (e:\ydt\2014项目\淄博公交加油站项目\zibogas\pos加油站v3.0\加油pos机\pos加油机\project):		var_bcd2asc(sendbuf+sendbuf_len, (uchar *)(&prec->oper_id[0]), 3); 
+SIM200.c (e:\ydt\2014项目\淄博公交加油站项目\zibogas\pos加油站v3.0\加油pos机\pos加油机\project):		var_bcd2asc(sendbuf+sendbuf_len, (uchar *)&prec->pos_purchase_serial_num, 3);
+SIM200.c (e:\ydt\2014项目\淄博公交加油站项目\zibogas\pos加油站v3.0\加油pos机\pos加油机\project):		//var_bcd2asc(sendbuf+sendbuf_len, &prec->bus_number[0], 5);
+SIM200.c (e:\ydt\2014项目\淄博公交加油站项目\zibogas\pos加油站v3.0\加油pos机\pos加油机\project):		var_bcd2asc(sendbuf+sendbuf_len, &prec->driver_no[0], 3); 
+SIM200.c (e:\ydt\2014项目\淄博公交加油站项目\zibogas\pos加油站v3.0\加油pos机\pos加油机\project):		var_bcd2asc(sendbuf+sendbuf_len, (uchar *)&prec->fuel_type, 1);
+SIM200.c (e:\ydt\2014项目\淄博公交加油站项目\zibogas\pos加油站v3.0\加油pos机\pos加油机\project)://  	var_bcd2asc(sendbuf+sendbuf_len, tmpbuf, 4);
+SIM200.c (e:\ydt\2014项目\淄博公交加油站项目\zibogas\pos加油站v3.0\加油pos机\pos加油机\project)://  	var_bcd2asc(sendbuf+sendbuf_len, tmpbuf, 4);
+SIM200.c (e:\ydt\2014项目\淄博公交加油站项目\zibogas\pos加油站v3.0\加油pos机\pos加油机\project):		var_bcd2asc(sendbuf+sendbuf_len, (uchar *)&prec->card_in_time, 7);	
+SIM200.c (e:\ydt\2014项目\淄博公交加油站项目\zibogas\pos加油站v3.0\加油pos机\pos加油机\project):		var_bcd2asc(sendbuf+sendbuf_len, DevStat.acnt_id, 2);
+SIM200.c (e:\ydt\2014项目\淄博公交加油站项目\zibogas\pos加油站v3.0\加油pos机\pos加油机\project):		var_bcd2asc(sendbuf+sendbuf_len, (uchar *)(&prec->oper_id[0]), 3); 
+SIM200.c (e:\ydt\2014项目\淄博公交加油站项目\zibogas\pos加油站v3.0\加油pos机\pos加油机\project):		var_bcd2asc(sendbuf+sendbuf_len, (uchar *)&prec->pos_purchase_serial_num, 3);
+SIM200.c (e:\ydt\2014项目\淄博公交加油站项目\zibogas\pos加油站v3.0\加油pos机\pos加油机\project):		//var_bcd2asc(sendbuf+sendbuf_len, &prec->bus_number[0], 5);
+SIM200.c (e:\ydt\2014项目\淄博公交加油站项目\zibogas\pos加油站v3.0\加油pos机\pos加油机\project):		var_bcd2asc(sendbuf+sendbuf_len, &prec->driver_no[0], 3); 
+SIM200.c (e:\ydt\2014项目\淄博公交加油站项目\zibogas\pos加油站v3.0\加油pos机\pos加油机\project):		var_bcd2asc(sendbuf+sendbuf_len, (uchar *)&prec->fuel_type, 1);
+SIM200.c (e:\ydt\2014项目\淄博公交加油站项目\zibogas\pos加油站v3.0\加油pos机\pos加油机\project)://  	var_bcd2asc(sendbuf+sendbuf_len, tmpbuf, 4);
+SIM200.c (e:\ydt\2014项目\淄博公交加油站项目\zibogas\pos加油站v3.0\加油pos机\pos加油机\project)://  	var_bcd2asc(sendbuf+sendbuf_len, tmpbuf, 4);
+SIM200.c (e:\ydt\2014项目\淄博公交加油站项目\zibogas\pos加油站v3.0\加油pos机\pos加油机\project):		var_bcd2asc(sendbuf+sendbuf_len, (uchar *)&prec->card_in_time, 7);	
+SIM200.c (e:\ydt\2014项目\淄博公交加油站项目\zibogas\pos加油站v3.0\加油pos机\pos加油机\project):	var_bcd2asc(sendbuf+sendbuf_len, DevStat.acnt_id, 2);
+SIM200.c (e:\ydt\2014项目\淄博公交加油站项目\zibogas\pos加油站v3.0\加油pos机\pos加油机\project):	var_bcd2asc(sendbuf+sendbuf_len, DevStat.oper_cardno, 3); 
+SIM200.c (e:\ydt\2014项目\淄博公交加油站项目\zibogas\pos加油站v3.0\加油pos机\pos加油机\project)://	var_bcd2asc(sendbuf+sendbuf_len, 0x00, 1);
+SIM200.c (e:\ydt\2014项目\淄博公交加油站项目\zibogas\pos加油站v3.0\加油pos机\pos加油机\project):	//var_bcd2asc(sendbuf+sendbuf_len, 0x01, 1);
+SIM200.c (e:\ydt\2014项目\淄博公交加油站项目\zibogas\pos加油站v3.0\加油pos机\pos加油机\project):	//var_bcd2asc(sendbuf+sendbuf_len, 0x02, 1);
+SIM200.c (e:\ydt\2014项目\淄博公交加油站项目\zibogas\pos加油站v3.0\加油pos机\pos加油机\project):	//var_bcd2asc(sendbuf+sendbuf_len, 0x03, 1);
+SIM200.c (e:\ydt\2014项目\淄博公交加油站项目\zibogas\pos加油站v3.0\加油pos机\pos加油机\project):	var_bcd2asc(sendbuf+sendbuf_len, (INT8U *)&ltime, 7);	
