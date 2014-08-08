@@ -624,7 +624,7 @@ reboot:
 					}
 					sscanf((void *)input, "%lf", &temp_price);
 					tmp_price[1] = temp_price * 100 + 0.001;
-				   break;
+				    break;
 
 				case EM_key_3:
 					EA_vCls();
@@ -641,7 +641,9 @@ reboot:
 					}
 
 					sscanf((void *)input, "%lf", &temp_price);
+
 					tmp_price[2] = temp_price * 100 + 0.001;
+					
 				   break;
 
 				case EM_key_4:
@@ -661,6 +663,7 @@ reboot:
 
 					sscanf((void *)input, "%lf", &temp_price);
 					tmp_price[3] = temp_price * 100 + 0.001;
+
 				     break;
 
 				case EM_key_ENTER:

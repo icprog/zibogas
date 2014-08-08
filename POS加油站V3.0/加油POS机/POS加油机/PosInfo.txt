@@ -2,6 +2,18 @@
 
 编译中...
 
+<<<<<<< HEAD
+=======
+Function.c
+
+In file included from .\project\/main.h:62,
+
+                 from .\project\function.c:11:
+
+.\project\/opercard.h:703: warning: function declaration isn't a 
+prototype
+
+>>>>>>> 97d4b1e87e981a0928c5753993d3f7ccc170bac3
 链接中...
 
 链接成功!
