@@ -28,7 +28,7 @@ INT32U clerkLen = sizeof(CLERK_STRUCT);
 
 
 extern CLERK_STRUCT clerk_list[MAX_CLERK_NUM];
-
+extern DEV_STAT DevStat;
 
 const char parmFileName[] = "param";
 const char blackFileName[] = "black";
@@ -82,6 +82,36 @@ INT8U Get_Time(BUS_TIME *time_data)
 	return ok;
 }
 
+void ReadParamRecNum(void)
+{
+	const char acModule[] = "param";
+	const char acFileName[] = "recnum";
+	uchar ucRet;
+	uint  uiFileSize;	
+		
+    // 读取参数文件数据
+    ucRet = EA_ucReadParamFile(acModule, acFileName, &uiFileSize, DevStat.record_number);
+    if (ucRet != EM_SUCCESS)
+	{	
+		//读取文件失败的处理代码
+		lcddisperr("读取参数文件失败");
+		return ;
+	}
+	return;
+}	
+
+void WriteParamRecNum(void)
+{	
+	const char acModule[] = "param";
+	const char acFileName[] = "recnum";
+	uchar ucRet;
+	// 向这个文件写入数据
+	ucRet = EA_ucWriteParamFile(acModule, acFileName, sizeof(DevStat.record_number), DevStat.record_number);
+	if (ucRet != EM_SUCCESS)
+	{
+		// 写数据失败的处理代码
+	}
+}
 /*****************************************************************
 函数原型：Modify_Time
 功能描述：修改时间，修改两次，为了防止偶尔一次不成功
@@ -194,21 +224,21 @@ INT8U CheckTimeFormat(const BUS_TIME *time)
 		return notok;
 
 	temp = time->hour;
-	if ( temp > 0x23 )                                   //小时应在0-23之间
+	if ( temp > 0x23 )                   //小时应在0-23之间
 		return notok;
 	temp = temp & 0x0F;
 	if ( temp > 0x09 )
 		return notok;
 
 	temp = time->minute;
-	if ( temp > 0x59 )                                   //分钟应在0-59之间
+	if ( temp > 0x59 )                   //分钟应在0-59之间
 		return notok;
 	temp = temp & 0x0F;
 	if ( temp > 0x09 )
 		return notok;
 
 	temp = time->second;
-	if ( temp > 0x59 )                                    //秒应在0-59之间
+	if ( temp > 0x59 )                   //秒应在0-59之间
 		return notok;
 	temp = temp & 0x0F;
 	if ( temp > 0x09 )
@@ -731,11 +761,11 @@ void param_factory_default(INT8U level)
 	strcpy((void *)&DevStat.user_passwd[0], "000000");
  	
 	DevStat.driver_is_working = FALSE;
-	memset(&DevStat.dev_trade_no[0], 0, 2);
+	memset(&DevStat.dev_trade_no[0], 0, 3);
 	DevStat.mode = 0x00;
 	DevStat.samcompcode = 1;
 	DevStat.Gprs_On_Flag = 0;
-	DevStat.effect_time.hour = 0x07;
+	//DevStat.effect_time.hour = 0x07;
 	memset(&DevStat.binhand, 0x00, sizeof(DevStat.binhand));
 
 	WriteParam();

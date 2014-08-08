@@ -2,45 +2,14 @@
 
 ±‡“Î÷–...
 
-cc1plus.exe: warning: command line option "-std=gnu99" is valid 
-for C/ObjC but not for C++
-
-cc1plus.exe: warning: command line option "-Wstrict-prototypes" 
-is valid for Ada/C/ObjC but not for C++
-
-cc1plus.exe: warning: command line option "-Wmissing-prototypes" 
-is valid for Ada/C/ObjC but not for C++
-
-cc1plus.exe: warning: command line option "-Wnested-externs" is 
-valid for C/ObjC but not for C++
-
-DB.C
-
 Function.c
 
-M1card.c
+In file included from .\project\/main.h:62,
 
-main.c
+                 from .\project\function.c:11:
 
-Menu.c
-
-opercard.c
-
-sam_card.c
-
-SIM200.c
-
-.\project\sim200.c: In function 'gprs_send_record':
-
-.\project\sim200.c:46: warning: unused variable 'last_record_no'
-
-.\project\sim200.c:39: warning: unused variable 'i'
-
-tcpip.c
-
-utils.c
-
-ydt.c
+.\project\/opercard.h:703: warning: function declaration isn't a 
+prototype
 
 ¡¥Ω”÷–...
 

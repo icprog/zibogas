@@ -195,8 +195,9 @@ int FindStr(unsigned char * data, int index_num)
 					}
 					//更新时间
 					{		
-						for(k=0; k<7; k++)
-							input_buffer[k] = ((a_to_h(RevBuff[2*k+24]))<<4)|((a_to_h(RevBuff[2*k+1+24]))&0x0f);
+						for(k=0; k<7; k++) 
+						    input_buffer[k] = ((a_to_h(RevBuff[2*k+43]))<<4)|((a_to_h(RevBuff[2*k+1+43]))&0x0f);
+						//var_asc2bcd(input_buffer, (uchar *)&RevBuff[2*k+43], 14);
 						memcpy((INT8U*)&time, input_buffer, 7);
 						if(CheckTimeFormat(&time) != ok)
 							return 0;

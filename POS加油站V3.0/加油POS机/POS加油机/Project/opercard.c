@@ -44,7 +44,7 @@ extern const char grayrecFileName[];
 //#define Debug_M1card   //by frank
 
 INT8U  KeySector[14][6];								//M1卡个区密钥，每个区密钥为6字节
-
+extern INT8U sendbuf[1024];
 // *****************************************************************
 // 功能：		printf_debug
 // 入口参数：	buf    显示输出字符串
@@ -836,9 +836,8 @@ INT8U oper_login_check(void)
 ******************************************************************************/
 INT8U download_price_table(void)
 {
-	INT8U   sendbuf[1024];
+	//INT8U   sendbuf[1024];
 	uchar   ret = 0;
-	BUS_TIME btime;
 	int 	sendlen;
 
 	lcddisperr("更新油价表");
@@ -852,6 +851,15 @@ INT8U download_price_table(void)
 	if( open_gprs_module() != ok )
 	{
 		lcddisperr("PPP拨号连接失败");
+		return notok;
+	}
+
+	strcpy((void *)sendbuf, "@START000000TIME000");
+	ret = GPRS_Send_Receive(sendbuf, strlen((void *)sendbuf));
+	if(ret != ok)
+	{
+		lcddisperr("同步服务器时间失败");
+		GPRS_Close();
 		return notok;
 	}
 
@@ -876,13 +884,11 @@ INT8U download_price_table(void)
 		EA_vDisplay(2, "  网络故障通讯失败  ");	
 		EA_vDisplay(3, "  网络正常后再尝试  ");
 		SleepMs(2000);
-//  	GPRS_Close();
+     	GPRS_Close();
 		return notok;
 	}
 
-	Get_Time(&btime);
-	if(btime.year * 10000 + btime.month * 1000 + btime.day * 100 + btime.hour * 10 + btime.minute
-	   >= DevStat.effect_time.year * 10000 + DevStat.effect_time.month * 1000 + DevStat.effect_time.day * 100 + DevStat.effect_time.hour * 10 + DevStat.effect_time.minute)
+	if( Is_timeup() == ok )
 	{
 		DevStat.price[0] = DevStat.price_backup[0];
 		DevStat.price[1] = DevStat.price_backup[1];
@@ -896,6 +902,38 @@ INT8U download_price_table(void)
 //  GPRS_Close();
 	return ok;
 
+}
+
+int Is_timeup()
+{
+	BUS_TIME ltime;
+	INT8U buf[22];
+	
+	Get_Time(&ltime);
+//	if((btime.year * 10000 + btime.month * 1000 + btime.day * 100 + btime.hour * 10 + btime.minute)
+//	   >= (DevStat.effect_time.year * 10000 + DevStat.effect_time.month * 1000 + DevStat.effect_time.day * 100 + DevStat.effect_time.hour * 10 + DevStat.effect_time.minute))
+//	{
+//		DevStat.price[0] = DevStat.price_backup[0];
+//		DevStat.price[1] = DevStat.price_backup[1];
+//		DevStat.price[2] = DevStat.price_backup[2];
+//		DevStat.price[3] = DevStat.price_backup[3];
+//	}
+	
+//	sprintf((void *)buf, "%02X%02X-%02X-%02X %02X:%02X",
+//		DevStat.effect_time.century, DevStat.effect_time.year, DevStat.effect_time.month, DevStat.effect_time.day, DevStat.effect_time.hour, DevStat.effect_time.minute);
+//	lcddisp(1, 1, (char *)buf);
+//
+//	sprintf((void *)buf, "%02X%02X-%02X-%02X %02X:%02X",
+//		ltime.century, ltime.year, ltime.month, ltime.day, ltime.hour, ltime.minute);
+//	lcddisp(2, 1, (char *)buf);
+
+	
+	if((ltime.year*10000 + ltime.month*100 + ltime.day) >= (DevStat.effect_time.year*10000 + DevStat.effect_time.month*100 + DevStat.effect_time.day))
+	{
+    	if((ltime.hour*100 + ltime.minute) >= (DevStat.effect_time.hour*100 + DevStat.effect_time.minute))
+			{return ok;}
+	}
+	return notok;
 }
 /******************************************************************************
  函数名称：download_whiltelist(void)
@@ -912,7 +950,7 @@ INT8U download_price_table(void)
 ******************************************************************************/
 uchar download_whiltelist(void)
 {
-	INT8U   sendbuf[1024], str[50];
+	INT8U   str[50];
 	uchar   ret=0;
 	uint    package_num=0, package_index=0, package_left=0;
 	INT8U	ch=0;
@@ -944,6 +982,15 @@ uchar download_whiltelist(void)
 	{
 		lcddisperr("PPP拨号连接失败");
 		Beeperr();
+		GPRS_Close();
+		return notok;
+	}
+
+	strcpy((void *)sendbuf, "@START000000TIME000");
+	ret = GPRS_Send_Receive(sendbuf, strlen((void *)sendbuf));
+	if(ret != ok)
+	{
+		lcddisperr("同步服务器时间失败");
 		GPRS_Close();
 		return notok;
 	}
@@ -1240,8 +1287,7 @@ void TextHeadDisplayTimer(void)
 			ltime.century, ltime.year, ltime.month, ltime.day, ltime.hour, ltime.minute);
 	EA_vTextOut(0, 0, EM_key_FONT8X16, 0, 1, 1, (char *)buf);
 
-	if(ltime.year * 10000 + ltime.month * 1000 + ltime.day * 100 + ltime.hour * 10 + ltime.minute
-	   >= DevStat.effect_time.year * 1000 + DevStat.effect_time.month * 1000 + DevStat.effect_time.day * 100 + DevStat.effect_time.hour * 10 + DevStat.effect_time.minute)
+	if( Is_timeup() == ok )
 	{
 		DevStat.price[0] = DevStat.price_backup[0];
 		DevStat.price[1] = DevStat.price_backup[1];
@@ -1250,6 +1296,7 @@ void TextHeadDisplayTimer(void)
 
 		WriteParam();
 	}
+
 }
 /*****************************************************************
 函数原型：INT8U Logout(void)

@@ -46,7 +46,7 @@ INT8U  rec_query[2*20 +2] = {"1.日结单查询        2.单笔记录查询      "};
 extern DEV_STAT     DevStat;					//设备状态
 extern CARD_INFO    CardInfo;					//卡片信息，交易记录由此变量生成
 extern ERROR_CARD_INFO ErrCardInfo;	//出错卡状态
-
+extern INT8U sendbuf[1024];
 // *****************************************************************
 // 功能：		OperPasswordCheck
 // 说明:		操作员卡密码检验
@@ -537,16 +537,19 @@ void price_Setting(void)
 	int     ret;
 	char    input[22], buf[22];
 	uchar   i;
-	double   temp_price;
+	double  temp_price;
 	INT8U   price_menu[2*20 + 2] = {"1.自动              2.手动              "};
-	INT16U key = EM_key_NOHIT;
+	INT16U  key = EM_key_NOHIT;
+	INT32U  tmp_price[4] = {0, 0, 0, 0};
+	//uint    sendbuf_len = 0;
 
 	memset(buf, 0, sizeof(buf));
+	memcpy(tmp_price, (INT8U *)&DevStat.price[0], 16);
 
 	ret = browse_menu(0, (unsigned char*)"", price_menu, TRUE);
 	switch ( ret )
 	{
-	   case 0:	// 自动更新
+	    case 0:	// 自动更新
 
 			if(download_price_table() == ok)
 			{
@@ -578,96 +581,114 @@ void price_Setting(void)
 			EA_vCls();
 			EA_ucClrKeyBuf();
 			strcpy((void *)input, "");
-			EA_vDisplay(1, "天然气 :%2.2f元/立方", DevStat.price[0]/100.0);
-			EA_vDisplay(2, "汽油93#:%2.2f元/升 ", DevStat.price[1]/100.0);
-			EA_vDisplay(3, "汽油97#:%2.2f元/升 ", DevStat.price[2]/100.0);
-			EA_vDisplay(4, "柴  油 :%2.2f元/升 ", DevStat.price[3]/100.0);
+reboot:
+			EA_vDisplay(1, "天然气 :%2.2f元/立方", tmp_price[0]/100.0);
+			EA_vDisplay(2, "汽油93#:%2.2f元/升 ",  tmp_price[1]/100.0);
+			EA_vDisplay(3, "汽油97#:%2.2f元/升 ",  tmp_price[2]/100.0);
+			EA_vDisplay(4, "柴  油 :%2.2f元/升 ",  tmp_price[3]/100.0);
 			EA_vDisplay(5, "按数字键改相应的油价");
 
 			key = EA_uiInkey(0);
 			switch ( key )
 			{
-			   case EM_key_1:
-				EA_vCls();
-			    EA_ucClrKeyBuf();
-				EA_vDisplay(1, "天然气 :%2.2f元/立方", DevStat.price[0]/100.0);
-				EA_vDisplay(2, "调整价 :%2.2f元/立方", DevStat.price[0]/100.0);
-				for ( ;; )
-				{
-					i = get_input_str(2, 11, 1, 6, (void *)input);
-					if ( i == EM_SUCCESS )
-						break;
-					if ( i == EM_ABOLISH )
-						return ;
-				}
+			    case EM_key_1:
+					EA_vCls();
+					EA_ucClrKeyBuf();
+					EA_vDisplay(1, "天然气 :%2.2f元/立方", tmp_price[0]/100.0);
+					EA_vDisplay(2, "调整价 :%2.2f元/立方", 00.00);
+					for ( ;; )
+					{
+						i = get_input_str(2, 11, 1, 6, (void *)input);
+						if ( i == EM_SUCCESS )
+							break;
+						if ( i == EM_ABOLISH )
+							break ;
+					}
 
-				sscanf((void *)input, "%lf", &temp_price);
-				DevStat.price[0] = temp_price * 100;
-				   break;
+					sscanf((void *)input, "%lf", &temp_price);
+					tmp_price[0] = temp_price * 100;
+				   	break;
 
 				case EM_key_2:
-				EA_vCls();
-			    EA_ucClrKeyBuf();
-				EA_vDisplay(1, "汽油93#:%2.2f元/升 ", DevStat.price[1]/100.0);
-				EA_vDisplay(2, "调整价 :%2.2f元/升 ", DevStat.price[1]/100.0);
-				for ( ;; )
-				{
-					i = get_input_str(2, 11, 1, 6, (void *)input);
-					if ( i == EM_SUCCESS )
-						break;
-					if ( i == EM_ABOLISH )
-						return ;
-				}
-				sscanf((void *)input, "%lf", &temp_price);
-				DevStat.price[1] = temp_price * 100;
+					EA_vCls();
+					EA_ucClrKeyBuf();
+					EA_vDisplay(1, "汽油93#:%2.2f元/升 ", tmp_price[1]/100.0);
+					EA_vDisplay(2, "调整价 :%2.2f元/升 ", 00.00);
+					for ( ;; )
+					{
+						i = get_input_str(2, 11, 1, 6, (void *)input);
+						if ( i == EM_SUCCESS )
+							break;
+						if ( i == EM_ABOLISH )
+							break ;
+					}
+					sscanf((void *)input, "%lf", &temp_price);
+					tmp_price[1] = temp_price * 100;
 				   break;
 
 				case EM_key_3:
-				EA_vCls();
-			    EA_ucClrKeyBuf();
-				EA_vDisplay(1, "汽油97#:%2.2f元/升 ", DevStat.price[2]/100.0);
-				EA_vDisplay(2, "调整价 :%2.2f元/升 ", DevStat.price[2]/100.0);
-				for ( ;; )
-				{
-					i = get_input_str(2, 11, 1, 6, (void *)input);
-					if ( i == EM_SUCCESS )
-						break;
-					if ( i == EM_ABOLISH )
-						return ;
-				}
+					EA_vCls();
+					EA_ucClrKeyBuf();
+					EA_vDisplay(1, "汽油97#:%2.2f元/升 ", tmp_price[2]/100.0);
+					EA_vDisplay(2, "调整价 :%2.2f元/升 ", 00.00);
+					for ( ;; )
+					{
+						i = get_input_str(2, 11, 1, 6, (void *)input);
+						if ( i == EM_SUCCESS )
+							break;
+						if ( i == EM_ABOLISH )
+							break ;
+					}
 
-				sscanf((void *)input, "%lf", &temp_price);
-				DevStat.price[2] = temp_price * 100;
+					sscanf((void *)input, "%lf", &temp_price);
+					tmp_price[2] = temp_price * 100;
 				   break;
 
 				case EM_key_4:
-				EA_vCls();
-			    EA_ucClrKeyBuf();
-				EA_vDisplay(1, "柴  油 :%2.2f元/升 ", DevStat.price[3]/100.0);
-				EA_vDisplay(2, "调整价 :%2.2f元/升 ", DevStat.price[3]/100.0);
-				for ( ;; )
-				{
-					i = get_input_str(2, 11, 1, 6, (void *)input);
-					if ( i == EM_SUCCESS )
-						break;
-					if ( i == EM_ABOLISH )
-						return ;
-				}
+					EA_vCls();
+					EA_ucClrKeyBuf();
+					EA_vDisplay(1, "柴  油 :%2.2f元/升 ", tmp_price[3]/100.0);
+					EA_vDisplay(2, "调整价 :%2.2f元/升 ", 00.00);
 
-				sscanf((void *)input, "%lf", &temp_price);
-				DevStat.price[3] = temp_price * 100;
-				   break;
+					for ( ;; )
+					{
+						i = get_input_str(2, 11, 1, 6, (void *)input);
+						if ( i == EM_SUCCESS )
+							break;
+						if ( i == EM_ABOLISH )
+							break;
+					}
+
+					sscanf((void *)input, "%lf", &temp_price);
+					tmp_price[3] = temp_price * 100;
+				     break;
 
 				case EM_key_ENTER:
 					
+					ret = upload_price_log(tmp_price);
+					if(ret != ok)
+					{
+						lcddisperr("更新油价失败");
+						GPRS_Close();
+						break;
+					}
+
+					DevStat.price[0] = tmp_price[0];
+					DevStat.price[1] = tmp_price[1];
+					DevStat.price[2] = tmp_price[2];
+					DevStat.price[3] = tmp_price[3];
 
 					lcddisperr("更新油价成功");
 					WriteParam();
+					GPRS_Close();
 					return;
 				default: 
-					return ;
+					break;
+				case EM_key_EXIT:
+					return;
+				
 			}
-	
+			goto reboot;
 		default: 
 			return ;
 		//	break;
@@ -921,7 +942,7 @@ int Record_Query(void)
 //    EA_vDisplay(1, "系统存储记录信息查询");
 //    EA_vDisplay(2, "交易记录有:%6d条", Num_rec);
 
-	if ( EA_ucPFOpen( (uchar *)currecFileName, &ucOpenID) != EM_ffs_SUCCESS )
+	if ( EA_ucPFOpen( (uchar *)hisrecFileName, &ucOpenID) != EM_ffs_SUCCESS )
 	{
 		lcddisperr("打开历史文件文件失败");
 		return 0;
