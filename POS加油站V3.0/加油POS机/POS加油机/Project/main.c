@@ -5,6 +5,10 @@ All rights riserved.
 文件名	：main.c
 模块名称：淄博加油POS机主程序
 功能概要：淄博加油POS机主程序 
+
+当前版本：0.1.5 
+    	  1、修改记录的传输方式
+    	  2、增加一个参数文件记录形式
  
 当前版本：0.1.3 
     	  1.设置油价更新有效时间
@@ -63,13 +67,11 @@ All rights riserved.
 DEV_STAT    DevStat;				//设备状态
 CARD_INFO 	CardInfo;				//卡片信息，交易记录由此变量生成
 ERROR_CARD_INFO ErrCardInfo;	    //出错卡状态
-const char *VERSION = "VER:0.1.3";  //版本号
+const char *VERSION = "VER:0.1.5";  //版本号
 GPRS gprs;
-//char dbuf[100];
 
+//gprs通讯相关
 extern int socketID;
-extern INT8U rec_query[2*20 +2];
-//INT16U   Apptimer_Delay;
 extern struct sockaddr_in s_add;
 
 //句柄结构定义，用于外设控制函数
@@ -82,6 +84,7 @@ DevHandle hSam2Handle ;      //SAM2卡
 DevHandle hMifsHandle;     //M1卡
 DevHandle hWLMHandle;     //GPRS模块
 //DevHandle hApptimerHandle; //定时计数器
+//INT16U   Apptimer_Delay;
 DevHandle hUSBDHandle;     //usb接口用做调试作用
 ET_DISK_INFO ptDiskInfo;
 ET_PART_INFO ptPartInfo;
@@ -94,9 +97,11 @@ extern const char hisrecFileName[];
 extern const char grayrecFileName[] ;
 extern const char clerkFileName[] ;
 
-CLERK_STRUCT clerk_list[MAX_CLERK_NUM];
+//LERK_STRUCT clerk_list[MAX_CLERK_NUM];
+extern INT8U rec_query[2*20 +2];
+extern INT8U  kuaijie_set[5*20 +2];
 
-INT8U  kuaijie_set[5*20 +2] = {"1.更新名单          2.记录上传          3.当前油价          4.重打上次小票      5.手动输入车号      "};
+
 /*****************************************************************
 函数原型：LowBatteryDisplay
 功能描述：本函数为电池电量显示
@@ -116,7 +121,7 @@ INT8U LowBatteryDisplay(void)
 
 	if( EA_ucGetPowerInfo(&PowerInfo) != EM_SUCCESS )
 	{
-		lcddisperr("batt check failed.");
+		lcddisperr("电池损坏请检测");
 		return notok;
 	}
 
@@ -124,7 +129,7 @@ INT8U LowBatteryDisplay(void)
 	{
 		if( PowerInfo.ucCapLevel == EM_power_CAPACITY_LEVEL_LOW )
 		{
-			lcddisperr(" 电池电量低请充电 ");
+			lcddisperr("电池电量低请充电");
 			return notok;
 		}
 		else if( PowerInfo.ucCapLevel == EM_power_CAPACITY_LEVEL_CRITICAL )
@@ -137,10 +142,19 @@ INT8U LowBatteryDisplay(void)
 	}
 	return ok;
 }
-
+/*****************************************************************
+函数原型：Debugprintf
+功能描述：本函数为调试信息输出
+参数描述：无
+参数名称：	输入/输出？	类型		描述
+ 作  者：   刘及华
+ 日  期：   2012-11-24
+ 修改历史：
+		日期        修改人      修改描述
+返 回 值：无
+*****************************************************************/
 void Debugprintf(const char *fmt, ...)
 {
-
 //  int n;
 //  char *arg;
 //  va_list arg = (va_list)((char*)(&fmt) + 4);
@@ -170,7 +184,7 @@ int main(int argc, char **argv)
 	(void)EA_ucSetStopFlag( EM_DISABLE_STOP );  //不允许系统进入睡眠状态；
 
 reboot:
-	ret = System_Init();                       //系统初始化,包括PSAM，参数表，GPRS初始化
+	ret = System_Init();      //系统初始化,包括PSAM，参数表，GPRS初始化
 	if( ret != ok )		 
 	{
 		lcddisperr("系统初始化失败!");
@@ -702,18 +716,16 @@ INT8U System_Init(void)
 	EA_vCls();
 	EA_ucSetInverse(EM_lcd_INVOFF);
 	EA_vDisp(2, 1, "   系统初始化中...  ");
-	key = EA_uiInkeyMs(2000);
+	key = EA_uiInkeyMs(1500);
 
 	if ( key == EM_key_F3 )
 	{
 		format_process();    		  //可以进行系统格式化操作
 	}
 
-
 	memset((void *)&DevStat, 0x00, sizeof(DevStat));
 
-	i = ReadParam();  
-	        
+	i = ReadParam();          
 	if ( i != ok )
 	{
 		param_factory_default(0);     //格式化重要参数DEV.STATE
@@ -1207,7 +1219,7 @@ void TimeModify(void)
 void format_process(void)
 {
 	INT8U i = 0;
-	INT8U input[50];
+	INT8U input[10];
 	INT8U passwd[10] = "22884646";
 
 	EA_vCls();
@@ -1229,6 +1241,7 @@ void format_process(void)
 	if ( strcmp((void *)input, (void *)passwd) == 0 )
 	{
 		lcddisperr("系统正在格式化...");
+		pf_format();
 	}
 	else
 	{

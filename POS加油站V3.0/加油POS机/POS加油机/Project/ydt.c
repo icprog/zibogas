@@ -184,6 +184,47 @@ uchar pf_write(uchar ucFileID, uint uiRecID, uchar *pucString)
 {
 	return( EA_ucPFWriteRec((uchar)ucFileID, (uint)uiRecID, (uchar *)pucString) );
 }
+
+uchar pf_format()
+{
+	//EA_ucPFFormat();
+	uchar ucResult;	
+	uchar ucOpenID;
+	uint  uiFreeSpace;	
+	uint  uiFileNums;
+	
+	E_ffs_FileDetailInfo *ptFileInfo;  //重要的结构体
+	
+	
+	// 获取文件个数
+	ucResult = EA_ucPFInfo(ucOpenID, EM_ffs_FILENUMS, &uiFileNums);	
+	switch (ucResult)
+	{
+		case EM_SUCCESS:
+			break;
+		default:
+			lcddisperr("文件系统损坏");
+			return notok;
+	}
+	
+	
+	// 动态分配空间
+	ptFileInfo = (E_ffs_FileDetailInfo *)malloc(uiFileNums*sizeof(E_ffs_FileDetailInfo));
+	if(ptFileInfo == NULL)
+	{
+		lcddisperr("动态分配空间失败");
+		return notok;
+	}
+	
+	// 获取文件信息	
+	ucResult = EA_ucPFGetFileSystemInfo(&uiFileNums, ptFileInfo, &uiFreeSpace);	
+	switch (ucResult)	
+	{
+	
+	
+	}
+	
+}
 /*****************************************************************
 函数原型：CheckTimeFormat
 功能描述：检查时间格式是否合法
@@ -695,6 +736,7 @@ void param_factory_default(INT8U level)
 	//建立5个记录文件包含，参数表，白名单，交易记录、
 	//历史记录、员工名单
 	INT8U i = 0;
+	
 	//重新参数表
 	 i = EA_ucPFCreate((uchar *)parmFileName, uiparamclen);  
 	 if ( i == EM_ffs_FILEEXIST )          //文件已经存在
