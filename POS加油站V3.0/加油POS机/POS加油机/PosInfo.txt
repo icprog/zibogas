@@ -2,8 +2,6 @@
 
 编译中...
 
-<<<<<<< HEAD
-=======
 Function.c
 
 In file included from .\project\/main.h:62,
@@ -13,12 +11,93 @@ In file included from .\project\/main.h:62,
 .\project\/opercard.h:703: warning: function declaration isn't a 
 prototype
 
->>>>>>> 97d4b1e87e981a0928c5753993d3f7ccc170bac3
-链接中...
+main.c
 
-链接成功!
+In file included from .\project\/main.h:62,
 
-.pkg包文件创建成功!
+                 from .\project\main.c:61:
+
+.\project\/opercard.h:703: warning: function declaration isn't a 
+prototype
+
+.\project\main.c: In function 'zbClerkFileInit':
+
+.\project\main.c:832: error: 'clerk_list' undeclared (first use 
+in this function)
+
+.\project\main.c:832: error: (Each undeclared identifier is 
+reported only once
+
+.\project\main.c:832: error: for each function it appears in.)
+
+.\project\main.c: In function 'zbClerkSaveFile':
+
+.\project\main.c:888: error: 'clerk_list' undeclared (first use 
+in this function)
+
+.\project\main.c: In function 'zbClerkReadFile':
+
+.\project\main.c:915: error: 'clerk_list' undeclared (first use 
+in this function)
+
+.\project\main.c: In function 'format_process':
+
+.\project\main.c:1244: warning: implicit declaration of function 
+'pf_format'
+
+.\project\main.c:1244: warning: nested extern declaration of 
+'pf_format'
+
+ydt.c
+
+In file included from .\project\/main.h:62,
+
+                 from .\project\ydt.c:15:
+
+.\project\/opercard.h:703: warning: function declaration isn't a 
+prototype
+
+.\project\ydt.c:31: warning: redundant redeclaration of 'DevStat'
+
+.\project\ydt.c:17: warning: previous declaration of 'DevStat' 
+was here
+
+.\project\ydt.c:85: warning: no previous prototype for 
+'ReadParamRecNum'
+
+.\project\ydt.c: In function 'ReadParamRecNum':
+
+.\project\ydt.c:93: warning: passing argument 4 of 
+'EA_ucReadParamFile' makes pointer from integer without a cast
+
+.\project\ydt.c: At top level:
+
+.\project\ydt.c:103: warning: no previous prototype for 
+'WriteParamRecNum'
+
+.\project\ydt.c: In function 'WriteParamRecNum':
+
+.\project\ydt.c:109: warning: passing argument 4 of 
+'EA_ucWriteParamFile' makes pointer from integer without a cast
+
+.\project\ydt.c: At top level:
+
+.\project\ydt.c:189: warning: function declaration isn't a 
+prototype
+
+.\project\ydt.c: In function 'pf_format':
+
+.\project\ydt.c:227: warning: control reaches end of non-void 
+function
+
+.\project\ydt.c:200: warning: 'ucOpenID' is used uninitialized in 
+this function
+
+Error executing armcc.exe.
+
+
+
+POS加油机.out - 5 error(s), 14 warning(s)
 
 
 

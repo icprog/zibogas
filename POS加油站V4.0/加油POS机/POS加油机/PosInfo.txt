@@ -1,0 +1,18 @@
+-----------------configuration: POS加油机-----------------
+
+编译中...
+
+SIM200.c
+
+.\project\sim200.c: In function 'gprs_send_record':
+
+.\project\sim200.c:73: warning: unused variable 'last_record_no'
+
+链接中...
+
+链接成功!
+
+.pkg包文件创建成功!
+
+
+

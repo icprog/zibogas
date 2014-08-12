@@ -1,0 +1,96 @@
+<html>
+<body>
+<pre>
+<h1>Build Log</h1>
+<h3>
+--------------------Configuration: POS加油机 - Win32 Debug--------------------
+</h3>
+<h3>Command Lines</h3>
+Creating temporary file "C:\WINDOWS\TEMP\RSP18D.tmp" with contents
+[
+/nologo /MDd /W3 /Gm /GX /ZI /Od /D "WIN32" /D "_DEBUG" /D "_WINDOWS" /D "_AFXDLL" /D "_MBCS" /FR"Debug/" /Fp"Debug/POS加油机.pch" /YX /Fo"Debug/" /Fd"Debug/" /FD /GZ /c 
+"Z:\YDT\2014项目\淄博公交加油站项目\POS加油站V3.0\加油POS机\POS加油机\Project\DB.C"
+"Z:\YDT\2014项目\淄博公交加油站项目\POS加油站V3.0\加油POS机\POS加油机\Project\Function.c"
+"Z:\YDT\2014项目\淄博公交加油站项目\POS加油站V3.0\加油POS机\POS加油机\Project\M1card.c"
+"Z:\YDT\2014项目\淄博公交加油站项目\POS加油站V3.0\加油POS机\POS加油机\Project\main.c"
+"Z:\YDT\2014项目\淄博公交加油站项目\POS加油站V3.0\加油POS机\POS加油机\Project\Menu.c"
+"Z:\YDT\2014项目\淄博公交加油站项目\POS加油站V3.0\加油POS机\POS加油机\Project\NormalData.c"
+"Z:\YDT\2014项目\淄博公交加油站项目\POS加油站V3.0\加油POS机\POS加油机\Project\opercard.c"
+"Z:\YDT\2014项目\淄博公交加油站项目\POS加油站V3.0\加油POS机\POS加油机\Project\sam_card.c"
+"Z:\YDT\2014项目\淄博公交加油站项目\POS加油站V3.0\加油POS机\POS加油机\Project\SIM200.c"
+"Z:\YDT\2014项目\淄博公交加油站项目\POS加油站V3.0\加油POS机\POS加油机\Project\tcpip.c"
+"Z:\YDT\2014项目\淄博公交加油站项目\POS加油站V3.0\加油POS机\POS加油机\Project\utils.c"
+"Z:\YDT\2014项目\淄博公交加油站项目\POS加油站V3.0\加油POS机\POS加油机\Project\ydt.c"
+]
+Creating command line "cl.exe @C:\WINDOWS\TEMP\RSP18D.tmp" 
+Creating temporary file "C:\WINDOWS\TEMP\RSP18E.tmp" with contents
+[
+/nologo /subsystem:windows /incremental:yes /pdb:"Debug/POS加油机.pdb" /debug /machine:I386 /out:"Debug/POS加油机.exe" /pdbtype:sept 
+".\Debug\DB.OBJ"
+".\Debug\Function.obj"
+".\Debug\M1card.obj"
+".\Debug\main.obj"
+".\Debug\Menu.obj"
+".\Debug\NormalData.obj"
+".\Debug\opercard.obj"
+".\Debug\sam_card.obj"
+".\Debug\SIM200.obj"
+".\Debug\tcpip.obj"
+".\Debug\utils.obj"
+".\Debug\ydt.obj"
+]
+Creating command line "link.exe @C:\WINDOWS\TEMP\RSP18E.tmp"
+<h3>Output Window</h3>
+Compiling...
+DB.C
+z:\ydt\2014项目\淄博公交加油站项目\pos加油站v3.0\加油pos机\pos加油机\project\main.h(26) : fatal error C1083: Cannot open include file: 'netinet/tcp.h': No such file or directory
+Function.c
+z:\ydt\2014项目\淄博公交加油站项目\pos加油站v3.0\加油pos机\pos加油机\project\main.h(26) : fatal error C1083: Cannot open include file: 'netinet/tcp.h': No such file or directory
+M1card.c
+z:\ydt\2014项目\淄博公交加油站项目\pos加油站v3.0\加油pos机\pos加油机\project\main.h(26) : fatal error C1083: Cannot open include file: 'netinet/tcp.h': No such file or directory
+main.c
+z:\ydt\2014项目\淄博公交加油站项目\pos加油站v3.0\加油pos机\pos加油机\project\main.h(26) : fatal error C1083: Cannot open include file: 'netinet/tcp.h': No such file or directory
+Menu.c
+z:\ydt\2014项目\淄博公交加油站项目\pos加油站v3.0\加油pos机\pos加油机\project\main.h(26) : fatal error C1083: Cannot open include file: 'netinet/tcp.h': No such file or directory
+NormalData.c
+opercard.c
+z:\ydt\2014项目\淄博公交加油站项目\pos加油站v3.0\加油pos机\pos加油机\project\main.h(26) : fatal error C1083: Cannot open include file: 'netinet/tcp.h': No such file or directory
+sam_card.c
+z:\ydt\2014项目\淄博公交加油站项目\pos加油站v3.0\加油pos机\pos加油机\project\main.h(26) : fatal error C1083: Cannot open include file: 'netinet/tcp.h': No such file or directory
+SIM200.c
+z:\ydt\2014项目\淄博公交加油站项目\pos加油站v3.0\加油pos机\pos加油机\project\main.h(26) : fatal error C1083: Cannot open include file: 'netinet/tcp.h': No such file or directory
+tcpip.c
+z:\ydt\2014项目\淄博公交加油站项目\pos加油站v3.0\加油pos机\pos加油机\project\main.h(26) : fatal error C1083: Cannot open include file: 'netinet/tcp.h': No such file or directory
+utils.c
+z:\ydt\2014项目\淄博公交加油站项目\pos加油站v3.0\加油pos机\pos加油机\project\main.h(26) : fatal error C1083: Cannot open include file: 'netinet/tcp.h': No such file or directory
+ydt.c
+z:\ydt\2014项目\淄博公交加油站项目\pos加油站v3.0\加油pos机\pos加油机\project\main.h(26) : fatal error C1083: Cannot open include file: 'netinet/tcp.h': No such file or directory
+执行 cl.exe 时出错.
+Creating temporary file "C:\WINDOWS\TEMP\RSP18F.tmp" with contents
+[
+/nologo /o"Debug/POS加油机.bsc" 
+".\Debug\DB.SBR"
+".\Debug\Function.sbr"
+".\Debug\M1card.sbr"
+".\Debug\main.sbr"
+".\Debug\Menu.sbr"
+".\Debug\NormalData.sbr"
+".\Debug\opercard.sbr"
+".\Debug\sam_card.sbr"
+".\Debug\SIM200.sbr"
+".\Debug\tcpip.sbr"
+".\Debug\utils.sbr"
+".\Debug\ydt.sbr"]
+Creating command line "bscmake.exe @C:\WINDOWS\TEMP\RSP18F.tmp"
+Creating browse info file...
+BSCMAKE: error BK1506 : cannot open file '.\Debug\DB.SBR': No such file or directory
+执行 bscmake.exe 时出错.
+<h3>Output Window</h3>
+
+
+
+<h3>Results</h3>
+POS加油机.exe - 1 error(s), 0 warning(s)
+</pre>
+</body>
+</html>
